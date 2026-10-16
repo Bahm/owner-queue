@@ -1,0 +1,8 @@
+{
+  "name": "owner-queue",
+  "version": "1.0.0",
+  "description": "Per-workstream claude.ai page where you answer everything Claude needs from you (decisions with pros and cons, steps only you can take, results to review); sessions act on your answers when you tell them to",
+  "author": { "name": "xbahm", "url": "https://github.com/xbahm" },
+  "repository": "https://github.com/xbahm/owner-queue",
+  "license": "MIT"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "owner-queue",
+  "description": "The Owner Queue skill for Claude Code",
+  "owner": { "name": "xbahm" },
+  "plugins": [
+    {
+      "name": "owner-queue",
+      "source": "./",
+      "description": "Per-workstream claude.ai page where you answer everything Claude needs from you; sessions act on your answers when you tell them to"
+    }
+  ]
+}

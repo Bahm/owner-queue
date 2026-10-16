@@ -1,0 +1,901 @@
+<title>__QUEUE_TITLE__</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+:root {
+  --bg: #F2F5F3;
+  --surface: #FFFFFF;
+  --ink: #17201B;
+  --muted: #55635B;
+  --rule: #D5DED9;
+  --accent: #1C6A46;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E0EEE6;
+  --warn: #A1470B;
+  --warn-soft: #F7E8DA;
+  --quiet: #7B8881;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1412;
+    --surface: #161D1A;
+    --ink: #E3EAE6;
+    --muted: #9AA9A1;
+    --rule: #29342F;
+    --accent: #5BC38E;
+    --accent-ink: #0B1912;
+    --accent-soft: #1A3127;
+    --warn: #EE9F5E;
+    --warn-soft: #382416;
+    --quiet: #6E7C75;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1412;
+  --surface: #161D1A;
+  --ink: #E3EAE6;
+  --muted: #9AA9A1;
+  --rule: #29342F;
+  --accent: #5BC38E;
+  --accent-ink: #0B1912;
+  --accent-soft: #1A3127;
+  --warn: #EE9F5E;
+  --warn-soft: #382416;
+  --quiet: #6E7C75;
+  color-scheme: dark;
+}
+
+[hidden] { display: none !important; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+.page {
+  max-width: 50rem;
+  margin: 0 auto;
+  padding-inline: 1rem;
+  padding-block: 2.25rem 4rem;
+  display: grid;
+  gap: 2.5rem;
+}
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  overflow-wrap: anywhere;
+}
+
+.masthead { display: grid; gap: 0.9rem; }
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(2rem, 6vw, 2.75rem);
+  line-height: 1.05;
+  margin: 0;
+  text-wrap: balance;
+}
+.tally {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 1rem;
+  margin: 0;
+}
+.tally strong {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.tally span { color: var(--muted); }
+.lede { margin: 0; max-width: 62ch; color: var(--muted); }
+.status {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+  min-height: 1.3em;
+}
+.status.is-error { color: var(--warn); }
+
+.group { display: grid; gap: 0.75rem; }
+.group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 0.4rem;
+}
+h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.3rem;
+  margin: 0;
+  text-wrap: balance;
+}
+h2 .count { font-family: var(--font-mono); font-weight: 400; font-size: 0.95rem; color: var(--muted); margin-left: 0.4rem; }
+.blurb { margin: 0; color: var(--muted); max-width: 62ch; }
+.items { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+
+.item {
+  display: grid;
+  grid-template-columns: 4.25rem minmax(0, 1fr);
+  gap: 0 1rem;
+  padding-block: 1.1rem;
+  border-bottom: 1px solid var(--rule);
+}
+.ref {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--accent);
+  padding-top: 0.2rem;
+  overflow-wrap: anywhere;
+}
+.body { display: grid; gap: 0.55rem; min-width: 0; overflow-wrap: anywhere; }
+.title-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.75rem; }
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.12rem;
+  line-height: 1.25;
+  margin: 0;
+  text-wrap: balance;
+}
+.chip {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.chip.due { background: var(--warn-soft); color: var(--warn); }
+.chip.waiting { background: var(--accent-soft); color: var(--muted); }
+.chip.kind { background: var(--accent-soft); color: var(--accent); }
+.ask { margin: 0; max-width: 65ch; white-space: pre-line; }
+.priority { margin: 0; max-width: 65ch; font-size: 0.9rem; color: var(--muted); }
+.priority .label { color: var(--accent); }
+.pick { margin: 0; max-width: 65ch; }
+.label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 0.4rem;
+}
+.pick.none { color: var(--muted); font-style: italic; }
+.sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 0.6rem 1.25rem; max-width: 65ch; }
+.side { min-width: 0; }
+.side h4 { margin: 0 0 0.2rem; font-size: 0.9rem; font-weight: 600; }
+.case { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.15rem; font-size: 0.9rem; }
+.case .pro::marker { content: "+  "; color: var(--accent); font-family: var(--font-mono); }
+.case .con::marker { content: "−  "; color: var(--warn); font-family: var(--font-mono); }
+.meta {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.15rem 0.75rem;
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.meta dt { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; padding-top: 0.15rem; }
+.meta dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.context { margin: 0; font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); overflow-wrap: anywhere; }
+
+.steps { margin: 0; padding-left: 1.4rem; display: grid; gap: 0.7rem; max-width: 65ch; }
+.steps li { padding-left: 0.2rem; }
+.steps li::marker { font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent); }
+.steps p { margin: 0; }
+.command {
+  margin-top: 0.35rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 0.45rem 0.5rem 0.45rem 0.7rem;
+}
+.command pre {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.command code { font-size: inherit; }
+.command button { flex: none; font-size: 0.78rem; padding: 0.2rem 0.6rem; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+button {
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button .tag {
+  margin-left: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+button.is-chosen { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button.is-chosen .tag { color: inherit; }
+button:disabled { cursor: default; opacity: 0.55; }
+button.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  font-size: 0.85rem;
+}
+.note { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.note label { font-size: 0.82rem; color: var(--muted); flex-basis: 100%; }
+.note input {
+  font: inherit;
+  font-size: 0.9rem;
+  flex: 1 1 14rem;
+  min-width: 0;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+}
+.note input.has-text { border-color: var(--accent); }
+.earlier-answers { display: grid; gap: 0.25rem; }
+.answer-line {
+  margin: 0;
+  font-size: 0.86rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  align-items: baseline;
+}
+
+.item.is-answered .ask, .item.is-answered .sides, .item.is-answered .pick, .item.is-answered .meta { color: var(--quiet); }
+.item.is-answered h3 { color: var(--muted); }
+
+.done { border-top: 1px solid var(--rule); padding-top: 1rem; }
+.done summary { cursor: pointer; font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; }
+.done .item { opacity: 0.8; }
+
+.placeholder {
+  border: 1px dashed var(--rule);
+  border-radius: 8px;
+  padding: 1.5rem 1.25rem;
+  color: var(--muted);
+  display: grid;
+  gap: 0.4rem;
+}
+.placeholder strong { color: var(--ink); font-family: var(--font-display); font-size: 1.1rem; font-weight: 600; }
+
+.footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 1rem; display: grid; gap: 0.4rem; }
+.footer p { margin: 0; max-width: 65ch; }
+
+@media (max-width: 34rem) {
+  .item { grid-template-columns: minmax(0, 1fr); gap: 0.35rem; }
+  .ref { padding-top: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important; }
+}
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <p class="eyebrow" id="eyebrow" hidden></p>
+    <h1>__QUEUE_TITLE__</h1>
+    <p class="tally" id="tally"><strong>Needs you: …</strong><span>Loading the queue.</span></p>
+    <p class="lede" id="lede">Everything in this workstream that needs you is here: decisions, steps only you can take, and results to review. Entries run most important first, and each says why it ranks where it does. Click an answer and add a note if it needs one, then tell a Claude session on this queue.</p>
+    <p class="status" id="status"></p>
+  </header>
+
+  <main id="queue">
+    <div class="placeholder" id="placeholder">
+      <strong>Loading the queue</strong>
+      <span>Entries come from this page's data store, most important first.</span>
+    </div>
+  </main>
+
+  <footer class="footer" id="footer">
+    <p>Each entry's Source line names the file or report with the full evidence. Where a file and this queue differ, the queue is newer.</p>
+  </footer>
+</div>
+
+<script>
+const DEFAULT_KINDS = {
+  go: "Go-ahead",
+  domain: "Your call",
+  yours: "Only you can do this",
+  review: "Review",
+  house: "Housekeeping",
+};
+const DEFAULT_TEXT = {
+  savedText: "Saved. Tell a Claude session on this queue when you're done.",
+  pendingText: "answered, waiting for Claude",
+  bulkLabel: "Accept all my picks",
+};
+const SECTIONS = [
+  { key: "open", label: "Your queue", blurb: "Most important first." },
+  { key: "waiting", label: "Scheduled", blurb: "Not on you. Listed so you know what runs next." },
+];
+
+const items = new Map();
+const answers = new Map();
+const itemViews = new Map();
+const sectionViews = new Map();
+const writeChains = new Map();
+let config = {};
+let database = null;
+let itemsLoaded = false;
+let readOnly = false;
+
+const queueElement = document.getElementById("queue");
+const statusElement = document.getElementById("status");
+const eyebrowElement = document.getElementById("eyebrow");
+const ledeElement = document.getElementById("lede");
+const footerElement = document.getElementById("footer");
+const defaultLede = ledeElement.textContent;
+const defaultFooter = [...footerElement.childNodes].map((node) => node.cloneNode(true));
+
+function setStatus(text, isError) {
+  statusElement.textContent = text;
+  statusElement.classList.toggle("is-error", Boolean(isError));
+}
+
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function withCode(target, text) {
+  const value = String(text);
+  const parts = value.split("`");
+  if (parts.length % 2 === 0) {
+    target.append(document.createTextNode(value));
+    return target;
+  }
+  parts.forEach((part, index) => {
+    if (part) target.append(index % 2 === 1 ? element("code", "", part) : document.createTextNode(part));
+  });
+  return target;
+}
+
+function isPlainObject(value) { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
+function kindLabels() { return { ...DEFAULT_KINDS, ...(isPlainObject(config.kinds) ? config.kinds : {}) }; }
+function configText(key) { return typeof config[key] === "string" && config[key] ? config[key] : DEFAULT_TEXT[key]; }
+function bulkSetting() { return isPlainObject(config.bulk) && config.bulk.kind ? config.bulk : null; }
+
+function applyConfig(next) {
+  config = isPlainObject(next) ? next : {};
+  eyebrowElement.textContent = config.eyebrow ? String(config.eyebrow) : "";
+  eyebrowElement.hidden = !config.eyebrow;
+  ledeElement.replaceChildren();
+  withCode(ledeElement, config.lede || defaultLede);
+  const paragraphs = Array.isArray(config.footer)
+    ? config.footer.map((text) => withCode(element("p"), text))
+    : defaultFooter.map((node) => node.cloneNode(true));
+  footerElement.replaceChildren(...paragraphs);
+  footerElement.hidden = footerElement.childElementCount === 0;
+  render();
+}
+
+function isOpen(item) { return item.status === "open"; }
+function isCurrent(id, answer) {
+  const askedAt = items.get(id)?.askedAt;
+  return !askedAt || Boolean(answer.at && answer.at >= askedAt);
+}
+function currentAnswer(id) {
+  const answer = answers.get(id);
+  return answer && isCurrent(id, answer) ? answer : null;
+}
+function earlierAnswer(id) {
+  const answer = answers.get(id);
+  return answer && !isCurrent(id, answer) ? answer : null;
+}
+function isAnswered(id) {
+  const answer = currentAnswer(id);
+  if (!answer) return false;
+  const choices = items.get(id)?.choices;
+  const hasChoices = Array.isArray(choices) && choices.length > 0;
+  return Boolean(answer.choice || (!hasChoices && answer.note));
+}
+function sectionOf(item) {
+  if (item.status === "done") return "done";
+  if (item.status === "waiting" || item.group === "waiting") return "waiting";
+  return "open";
+}
+function needsYou(id, item) { return isOpen(item) && sectionOf(item) === "open" && !isAnswered(id); }
+
+function sortedItems() {
+  return [...items.entries()].sort(([, first], [, second]) =>
+    (first.priority ?? Infinity) - (second.priority ?? Infinity) || (first.order ?? 999) - (second.order ?? 999));
+}
+
+function buildSections() {
+  queueElement.replaceChildren();
+  for (const section of SECTIONS) {
+    const root = element("section", "group");
+    root.id = section.key;
+    const head = element("div", "group-head");
+    const heading = element("h2", "", section.label);
+    const count = element("span", "count");
+    heading.append(count);
+    head.append(heading);
+    let bulkButton = null;
+    if (section.key === "open") {
+      bulkButton = element("button");
+      bulkButton.type = "button";
+      bulkButton.id = "accept-all";
+      bulkButton.hidden = true;
+      bulkButton.addEventListener("click", () => { const bulk = bulkSetting(); if (bulk) acceptAll(bulk.kind); });
+      head.append(bulkButton);
+    }
+    const list = element("ul", "items");
+    root.append(head, element("p", "blurb", section.blurb), list);
+    queueElement.append(root);
+    sectionViews.set(section.key, { section: root, list, count, bulkButton });
+  }
+  const done = element("details", "done");
+  done.id = "done";
+  const summary = element("summary", "", "Done");
+  const list = element("ul", "items");
+  done.append(summary, list);
+  queueElement.append(done);
+  sectionViews.set("done", { section: done, list, summary });
+}
+
+function createItemView(id) {
+  const root = element("li", "item");
+  root.id = "item-" + id;
+  const ref = element("div", "ref");
+  const body = element("div", "body");
+  const titleRow = element("div", "title-row");
+  const title = element("h3");
+  const kindChip = element("span", "chip kind");
+  const dueChip = element("span", "chip due");
+  const waitingChip = element("span", "chip waiting", "scheduled");
+  titleRow.append(title, kindChip, dueChip, waitingChip);
+  const priority = element("p", "priority");
+  const ask = element("p", "ask");
+  const sides = element("div", "sides");
+  const pick = element("p", "pick");
+  const meta = element("dl", "meta");
+  const steps = element("ol", "steps");
+  const context = element("p", "context");
+  const actions = element("div", "actions");
+  const note = element("div", "note");
+  const noteLabel = element("label");
+  const noteInput = element("input");
+  noteInput.type = "text";
+  noteInput.id = "note-" + id;
+  noteLabel.htmlFor = noteInput.id;
+  note.append(noteLabel, noteInput);
+  const clearButton = element("button", "link", "Clear");
+  clearButton.type = "button";
+  const earlierAnswers = element("div", "earlier-answers");
+  body.append(titleRow, priority, ask, sides, pick, meta, steps, context, actions, note, earlierAnswers);
+  root.append(ref, body);
+
+  const view = { root, ref, title, kindChip, dueChip, waitingChip, priority, ask, sides, pick, meta, steps, context, actions, clearButton, note, noteLabel, noteInput, noteTimer: 0, earlierAnswers, choicesKey: "", stepsKey: "" };
+  itemViews.set(id, view);
+
+  noteInput.addEventListener("input", () => {
+    noteInput.dataset.dirty = "1";
+    noteInput.classList.toggle("has-text", noteInput.value.trim() !== "");
+    clearTimeout(view.noteTimer);
+    view.noteTimer = setTimeout(() => saveNote(id), 800);
+  });
+  noteInput.addEventListener("blur", () => saveNote(id));
+  noteInput.addEventListener("keydown", (event) => { if (event.key === "Enter") saveNote(id); });
+  clearButton.addEventListener("click", () => clearChoice(id));
+  return view;
+}
+
+function updateItemView(id, item, rank, openCount, kinds) {
+  const view = itemViews.get(id) || createItemView(id);
+  const answer = currentAnswer(id) || {};
+  const answered = isAnswered(id);
+  const interactive = isOpen(item) && Boolean(database) && !readOnly;
+
+  view.root.classList.toggle("is-answered", answered);
+  view.ref.textContent = item.ref || "";
+  view.title.textContent = item.title || "";
+  view.kindChip.textContent = kinds[item.group] || "";
+  view.kindChip.hidden = !rank || !kinds[item.group];
+  view.dueChip.textContent = item.due || "";
+  view.dueChip.hidden = !item.due || answered;
+  view.waitingChip.hidden = item.status !== "waiting";
+  view.ask.replaceChildren();
+  if (item.ask) withCode(view.ask, item.ask);
+  view.ask.hidden = !item.ask;
+
+  view.pick.replaceChildren();
+  view.pick.classList.toggle("none", !item.pick);
+  if (item.pick) {
+    view.pick.append(element("span", "label", "My pick"));
+    withCode(view.pick, item.pick);
+  } else {
+    view.pick.textContent = item.status === "done" ? "" : "No pick from me. This one is yours.";
+  }
+  view.pick.hidden = item.status === "waiting" || item.status === "done";
+
+  view.meta.replaceChildren();
+  view.priority.replaceChildren();
+  if (rank) {
+    view.priority.append(element("span", "label", "Priority " + rank + " of " + openCount));
+    if (item.priorityReason) view.priority.append(document.createTextNode(item.priorityReason));
+  }
+  view.priority.hidden = !rank;
+
+  const metaRows = [["Effort", item.effort], ["Undo", item.undo], ["Unblocks", item.unblocks], ["Outcome", item.outcome]];
+  for (const [term, value] of metaRows) {
+    if (!value) continue;
+    view.meta.append(element("dt", "", term), withCode(element("dd"), value));
+  }
+  view.meta.hidden = view.meta.childElementCount === 0;
+
+  const steps = Array.isArray(item.steps) ? item.steps : [];
+  const stepsKey = JSON.stringify(steps);
+  if (stepsKey !== view.stepsKey) {
+    view.steps.replaceChildren();
+    for (const step of steps) {
+      const entry = element("li");
+      if (step.text) entry.append(withCode(element("p"), step.text));
+      if (step.command) {
+        const block = element("div", "command");
+        const pre = element("pre");
+        const code = element("code", "", step.command);
+        pre.append(code);
+        const copy = element("button", "", "Copy");
+        copy.type = "button";
+        copy.addEventListener("click", () => copyCommand(step.command, code, copy));
+        block.append(pre, copy);
+        entry.append(block);
+      }
+      view.steps.append(entry);
+    }
+    view.stepsKey = stepsKey;
+  }
+  view.steps.hidden = steps.length === 0;
+
+  view.context.textContent = item.source ? "Source: " + item.source : "";
+  view.context.hidden = !item.source;
+
+  const choices = Array.isArray(item.choices) ? item.choices : [];
+  const choicesKey = JSON.stringify(choices);
+  if (choicesKey !== view.choicesKey) {
+    view.actions.replaceChildren();
+    for (const choice of choices) {
+      const button = element("button", "", choice.label);
+      if (choice.primary) button.append(element("span", "tag", "Recommended"));
+      button.type = "button";
+      button.id = "choice-" + id + "-" + choice.key;
+      button.dataset.key = choice.key;
+      button.addEventListener("click", () => choose(id, choice));
+      view.actions.append(button);
+    }
+    view.actions.append(view.clearButton);
+    view.sides.replaceChildren();
+    for (const choice of choices) {
+      const pros = Array.isArray(choice.pros) ? choice.pros : [];
+      const cons = Array.isArray(choice.cons) ? choice.cons : [];
+      if (pros.length === 0 && cons.length === 0) continue;
+      const list = element("ul", "case");
+      for (const pro of pros) list.append(withCode(element("li", "pro"), pro));
+      for (const con of cons) list.append(withCode(element("li", "con"), con));
+      const side = element("section", "side");
+      side.append(element("h4", "", choice.label), list);
+      view.sides.append(side);
+    }
+    view.choicesKey = choicesKey;
+  }
+  view.sides.hidden = !isOpen(item) || view.sides.childElementCount === 0;
+  for (const button of view.actions.querySelectorAll("button[data-key]")) {
+    button.classList.toggle("is-chosen", answer.choice === button.dataset.key);
+    button.disabled = !interactive;
+  }
+  view.clearButton.hidden = !interactive || !answer.choice;
+  view.actions.hidden = !isOpen(item) || choices.length === 0;
+
+  view.note.hidden = !isOpen(item);
+  view.noteLabel.textContent = item.input || "Note (optional)";
+  view.noteInput.disabled = !interactive;
+  if (document.activeElement !== view.noteInput && !view.noteInput.dataset.dirty) {
+    view.noteInput.value = answer.note || "";
+  }
+  view.noteInput.classList.toggle("has-text", view.noteInput.value.trim() !== "");
+
+  view.earlierAnswers.replaceChildren();
+  const history = Array.isArray(item.history) ? [...item.history] : [];
+  const earlier = earlierAnswer(id);
+  if (earlier && !history.some((entry) => entry.at === earlier.at)) history.push(earlier);
+  for (const entry of history) {
+    const label = entry.choiceLabel || entry.choice;
+    if (!label && !entry.note) continue;
+    const line = element("p", "answer-line");
+    line.append(element("span", "label", "Earlier answer"));
+    if (label) line.append(element("span", "", label));
+    if (entry.note) line.append(element("span", "", "“" + entry.note + "”"));
+    view.earlierAnswers.append(line);
+  }
+  view.earlierAnswers.hidden = view.earlierAnswers.childElementCount === 0;
+  return view;
+}
+
+async function copyCommand(text, code, button) {
+  try {
+    await navigator.clipboard.writeText(text);
+    button.textContent = "Copied";
+  } catch (error) {
+    const range = document.createRange();
+    range.selectNodeContents(code);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    button.textContent = "Selected: press Ctrl+C or ⌘C";
+  }
+  setTimeout(() => { button.textContent = "Copy"; }, 2500);
+}
+
+function showEmpty() {
+  document.getElementById("placeholder").replaceChildren(element("strong", "", "The queue is empty"), element("span", "", "Nothing waits on you right now. New entries appear here when I add them."));
+  document.getElementById("tally").replaceChildren(element("strong", "", "Needs you: 0"));
+}
+
+function render() {
+  if (!itemsLoaded) return;
+  if (items.size === 0 && sectionViews.size === 0) {
+    showEmpty();
+    return;
+  }
+  document.getElementById("placeholder")?.remove();
+  if (sectionViews.size === 0) buildSections();
+
+  const kinds = kindLabels();
+  const sorted = sortedItems();
+  const openCount = sorted.filter(([, item]) => sectionOf(item) === "open").length;
+  const placed = new Map([...sectionViews.keys()].map((key) => [key, []]));
+  for (const [id, item] of sorted) {
+    const key = sectionOf(item);
+    const rank = key === "open" ? placed.get("open").length + 1 : 0;
+    placed.get(key).push(updateItemView(id, item, rank, openCount, kinds).root);
+  }
+  for (const [id, view] of itemViews) {
+    if (!items.has(id)) { view.root.remove(); itemViews.delete(id); }
+  }
+
+  for (const [key, view] of sectionViews) {
+    const roots = placed.get(key);
+    const current = [...view.list.children];
+    if (current.length !== roots.length || current.some((node, index) => node !== roots[index])) {
+      view.list.append(...roots);
+    }
+    view.section.hidden = roots.length === 0;
+  }
+
+  const openItems = sorted.filter(([, item]) => sectionOf(item) === "open");
+  const total = openItems.filter(([id, item]) => needsYou(id, item)).length;
+  const answeredHere = openItems.filter(([id, item]) => isOpen(item) && isAnswered(id)).length;
+  sectionViews.get("open").count.textContent = total + " open";
+  sectionViews.get("waiting").count.textContent = String(placed.get("waiting").length);
+  sectionViews.get("done").summary.textContent = "Done (" + placed.get("done").length + ")";
+  const bulk = bulkSetting();
+  const bulkButton = sectionViews.get("open").bulkButton;
+  const pendingBulk = bulk ? openItems.filter(([id, item]) => item.group === bulk.kind && needsYou(id, item) && primaryChoice(item)) : [];
+  bulkButton.hidden = pendingBulk.length < 2;
+  bulkButton.textContent = (bulk?.label || DEFAULT_TEXT.bulkLabel) + " (" + pendingBulk.length + ")";
+  bulkButton.disabled = !database || readOnly;
+
+  const tally = document.getElementById("tally");
+  tally.replaceChildren(element("strong", "", "Needs you: " + total));
+  const parts = [];
+  if (answeredHere) parts.push(answeredHere + " " + configText("pendingText"));
+  if (total === 0 && !answeredHere) parts.push("nothing waits on you");
+  if (parts.length) tally.append(element("span", "", parts.join(". ") + "."));
+}
+
+function primaryChoice(item) {
+  return (Array.isArray(item.choices) ? item.choices : []).find((choice) => choice.primary);
+}
+
+function queueWrite(id, operation) {
+  const previous = writeChains.get(id) || Promise.resolve();
+  const next = previous.then(operation);
+  writeChains.set(id, next.catch(() => {}));
+  return next;
+}
+
+async function writeWithRetry(operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error && error.code === "unavailable") {
+      await new Promise((resolve) => setTimeout(resolve, 600 + Math.random() * 900));
+      return operation();
+    }
+    throw error;
+  }
+}
+
+function handleWriteError(error) {
+  const code = error && error.code;
+  if (code === "invalid_argument" || code === "not_granted" || code === "capability_disabled" || code === "capability_removed" || code === "revoked") {
+    readOnly = true;
+    setStatus("This view can't save answers. Open the queue on claude.ai, signed in as its owner.", true);
+  } else if (code === "quota_exceeded") {
+    setStatus("The page's data store is full, so that answer wasn't saved.", true);
+  } else if (code === "resource_exhausted") {
+    setStatus("Too many saves at once. Wait a few seconds and try again.", true);
+  } else {
+    setStatus("That answer wasn't saved. Try again.", true);
+  }
+  render();
+}
+
+async function saveAnswer(id, patch) {
+  if (!database || readOnly) return;
+  const current = currentAnswer(id) || {};
+  const body = {
+    choice: current.choice || "",
+    choiceLabel: current.choiceLabel || "",
+    note: current.note || "",
+    ...patch,
+    at: new Date().toISOString(),
+  };
+  answers.set(id, body);
+  render();
+  setStatus("Saving…");
+  try {
+    await queueWrite(id, () => writeWithRetry(() => database.collection("answers").doc(id).set(body)));
+    setStatus(configText("savedText"));
+  } catch (error) {
+    handleWriteError(error);
+  }
+}
+
+function choose(id, choice) {
+  const view = itemViews.get(id);
+  const patch = { choice: choice.key, choiceLabel: choice.label };
+  if (view && view.noteInput.dataset.dirty) {
+    clearTimeout(view.noteTimer);
+    patch.note = view.noteInput.value.trim();
+    delete view.noteInput.dataset.dirty;
+  }
+  saveAnswer(id, patch);
+}
+
+function saveNote(id) {
+  const view = itemViews.get(id);
+  if (!view) return;
+  clearTimeout(view.noteTimer);
+  if (!view.noteInput.dataset.dirty) return;
+  delete view.noteInput.dataset.dirty;
+  const note = view.noteInput.value.trim();
+  const current = currentAnswer(id) || {};
+  if (note === (current.note || "")) return;
+  if (!note && !current.choice) {
+    deleteAnswer(id);
+    return;
+  }
+  saveAnswer(id, { note });
+}
+
+function clearChoice(id) {
+  const view = itemViews.get(id);
+  if (!view) return;
+  clearTimeout(view.noteTimer);
+  delete view.noteInput.dataset.dirty;
+  const note = view.noteInput.value.trim();
+  if (note) saveAnswer(id, { choice: "", choiceLabel: "", note });
+  else deleteAnswer(id);
+}
+
+async function deleteAnswer(id) {
+  if (!database || readOnly) return;
+  answers.delete(id);
+  render();
+  setStatus("Clearing…");
+  try {
+    await queueWrite(id, () => writeWithRetry(() => database.collection("answers").doc(id).delete()));
+    setStatus("Cleared.");
+  } catch (error) {
+    handleWriteError(error);
+  }
+}
+
+async function acceptAll(kind) {
+  const pending = sortedItems().filter(([id, item]) => item.group === kind && needsYou(id, item) && primaryChoice(item));
+  for (const [id, item] of pending) {
+    const choice = primaryChoice(item);
+    await saveAnswer(id, { choice: choice.key, choiceLabel: choice.label });
+    if (readOnly) return;
+  }
+}
+
+function showUnavailable(text) {
+  const placeholder = document.getElementById("placeholder");
+  if (placeholder) {
+    placeholder.replaceChildren(element("strong", "", "The queue can't load in this view"), element("span", "", text));
+  }
+  document.getElementById("tally").replaceChildren(element("strong", "", "Needs you: ?"), element("span", "", "The queue didn't load."));
+}
+
+function onSubscriptionError(error) {
+  const code = error && error.code;
+  if (code === "revoked") {
+    readOnly = true;
+    setStatus("This view lost access to the queue's data.", true);
+  } else {
+    setStatus("Lost the live connection to the queue. Reload the page to reconnect.", true);
+  }
+  render();
+}
+
+async function start() {
+  try {
+    database = await window.claude?.use?.("db");
+  } catch (error) {
+    database = null;
+  }
+  if (!database) {
+    showUnavailable("Entries live in this page's data store, which this view can't reach. Open the queue on claude.ai while signed in.");
+    return;
+  }
+  database.collection("config").onSnapshot((snapshot) => {
+    const page = snapshot.docs.find((doc) => doc.id === "page");
+    applyConfig(page ? page.data() : {});
+  }, onSubscriptionError);
+  database.collection("items").onSnapshot((snapshot) => {
+    items.clear();
+    for (const doc of snapshot.docs) items.set(doc.id, doc.data());
+    itemsLoaded = true;
+    render();
+  }, onSubscriptionError);
+  database.collection("answers").onSnapshot((snapshot) => {
+    answers.clear();
+    for (const doc of snapshot.docs) answers.set(doc.id, doc.data());
+    render();
+  }, onSubscriptionError);
+}
+
+start();
+</script>
