@@ -189,10 +189,13 @@ class QueueScript(unittest.TestCase):
         g58 = items["g58"]
         self.assertEqual((g58["ref"], g58["title"], g58["ask"]), ("G58", "The farthest zoom", "5.8 or 5.5 million?"))
         self.assertEqual(g58["choices"][0], {"key": "55", "label": "5.5 million", "primary": True})
-        self.assertEqual([h["choiceLabel"] for h in g58["history"]], ["Simplify sooner", "5.5 million"])
+        self.assertEqual([h["choiceLabel"] for h in g58["history"]], ["Simplify sooner"])
+        carried = [x for x in w if x["collection"] == "people/u_des/answers"]
+        self.assertEqual([x["doc_id"] for x in carried], ["g58"], "an untaken answer stays current, under its author")
+        self.assertLess(g58["askedAt"], json.loads(Path(carried[0]["file_path"]).read_text())["at"])
         self.assertTrue(items["g65"]["lowPriority"])
         self.assertEqual(sum(1 for x in w if x["collection"] == "feed"), 1, "only the last 48 hours")
-        self.assertIn("not taken in yet: G58", r.stdout)
+        self.assertIn("carried over as current answers for the queue's session to take in: G58 (a collaborator", r.stdout)
         self.assertIn("panel", r.stdout)
         self.assertIn('"nextRef": "G66"', self.run_q("status", "t").stdout)
         (ans / "answers/free.json").write_text(json.dumps({"note": "Two things to consider.", "at": iso(600)}))

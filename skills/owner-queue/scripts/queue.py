@@ -623,11 +623,19 @@ def cmd_migrate(a):
         m = re.search(r'<p class="lede"[^>]*>(.*?)</p>', src, re.S)
         lede = m.group(1).strip() if m and "<b>" in m.group(1) else None
     old_answers = read_dir(a.answers, "answers") if a.answers else {}
+    # 1.x pages that recorded `by` did so from some date on; their unrecorded answers are the owner's.
+    records_by = any(isinstance(x, dict) and x.get("by") for x in old_answers.values())
+    letter = re.escape(state["prefix"].lower()) or "q"
+    for old_id in old_answers:
+        n = re.fullmatch(rf"{letter}(\d+)[a-z]?", old_id)
+        if n:
+            state["next"] = max(state["next"], int(n.group(1)) + 1)
     out = Out(state, "migrate")
-    priority, migrated, untaken = 1, [], []
+    priority, migrated, carried, unknown = 1, [], [], []
+    touched = {}
     for s in sections:
         low = "low priority" in str(s.get("title", "")).lower() or s.get("id") == "open"
-        for it in s.get("items", []):
+        for index, it in enumerate(s.get("items", [])):
             item_id = str(it["id"]).lower()
             tag = str(it.get("tag", ""))
             head, dot, rest = tag.partition("·")
@@ -655,18 +663,28 @@ def cmd_migrate(a):
                     c["pros"], c["cons"] = pc_split(pc[it["id"]][key])
                 choices.append(c)
             history = [{"who": "", "choiceLabel": p.get("choice", ""), "note": p.get("note", ""), "at": p.get("at", "")} for p in it.get("prev", [])]
+            asked = stamp()
             old = old_answers.get(it["id"]) or old_answers.get(item_id)
             if old and (old.get("choice") or str(old.get("note", "")).strip()):
-                untaken.append(f"{ref} ({old.get('at', '')[:16].replace('T', ' ')})")
+                # An open question with an answer on 1.x: not taken in yet. Carry it over as its author's current answer.
                 label = next((c["label"] for c in choices if c["key"] == old.get("choice")), old.get("choice") or "")
-                who = "the owner" if not old.get("by") or old.get("by") == state.get("owner") else "a collaborator"
-                history.append({"who": who, "choiceLabel": label, "note": old.get("note", ""), "at": old.get("at", "")})
+                author = old.get("by") or (state.get("owner") if (records_by or a.unattributed == "owner") else None)
+                t = parse_time(str(old.get("at", "")))
+                if author and t:
+                    asked = stamp(t - dt.timedelta(seconds=1))
+                    out.add("set", f"people/{author}/answers", item_id,
+                            {"choice": old.get("choice") or "", "choiceLabel": label, "note": old.get("note", ""), "at": stamp(t)})
+                    touched[author] = max(touched.get(author, ""), stamp(t))
+                    carried.append(f"{ref} ({'the owner' if author == state.get('owner') else 'a collaborator'}, {stamp(t)[:16].replace('T', ' ')})")
+                else:
+                    unknown.append(ref)
+                    history.append({"who": "", "choiceLabel": label, "note": old.get("note", ""), "at": old.get("at", "")})
             item = {"ref": ref, "title": title or question or ref, "status": "open",
                     "ask": question or title or ref,
-                    "context": it.get("ctx", ""), "choices": choices, "askedAt": stamp(),
+                    "context": it.get("ctx", ""), "choices": choices, "askedAt": asked,
                     "priority": priority, "priorityReason": f"Carried over from the 1.x page, where it sat under \"{s.get('title', '')}\". Re-rank it.",
                     "source": f"Migrated from the 1.x queue{(': ' + topic) if topic else ''}"}
-            if s.get("intro"):
+            if s.get("intro") and index == 0:
                 item["context"] = s["intro"] + item["context"]
             if low:
                 item["lowPriority"] = True
@@ -679,6 +697,8 @@ def cmd_migrate(a):
             priority += 1
             out.add("set", "items", item_id, item)
             migrated.append(ref)
+    for author, at in touched.items():
+        out.add("set", "people", author, {"lastAnswerAt": at})
     cutoff = now() - dt.timedelta(hours=FEED_HOURS)
     kept = 0
     for f in fyi:
@@ -701,10 +721,17 @@ def cmd_migrate(a):
         p = cache_root() / state["slug"] / "migrated-needs-panel.json"
         p.write_text(json.dumps([{"id": "needs", "title": "Needs you, in person", "html": needs}], ensure_ascii=False, indent=1))
         notes.append(f"The old \"Needs you, in person\" text is a panel in {p}: `queue.py config --panels {p}`.")
-    if untaken:
-        notes.append("WARNING: these open questions have answers in the old store, probably not taken in yet: "
-                     + ", ".join(untaken) + ". Act on them (or confirm they're stale) before switching; after it, "
-                     "they show only as Previous answers.")
+    if carried:
+        notes.append("Answers not taken in yet, carried over as current answers for the queue's session to take in: "
+                     + ", ".join(carried) + ".")
+    if unknown:
+        notes.append("WARNING: " + ", ".join(unknown) + " have answers on 1.x from someone the old page didn't record. "
+                     "They're under Previous answers. Take them in before switching, or pass --unattributed owner "
+                     "if only the owner answered on that queue.")
+    if src.lstrip().startswith("{") and content.get("parked"):
+        p = cache_root() / state["slug"] / "migrated-parked.json"
+        p.write_text(json.dumps(content["parked"], ensure_ascii=False, indent=1))
+        notes.append(f"The old page's parked notes are saved in {p}; 2.x has no place for them.")
     free = old_answers.get("free")
     if free and str(free.get("note", "")).strip():
         if state.get("owner"):
@@ -713,7 +740,7 @@ def cmd_migrate(a):
         else:
             notes.append("WARNING: the old \"Anything else\" still holds a note. Run migrate again after `bind` to carry it over, "
                          "or take it in (and save it) before switching.")
-    notes.append("Old answers stay in the store's `answers` collection; open questions carry them under Previous answers.")
+    notes.append("Old answers stay in the store's `answers` collection.")
     out.emit("\n".join(notes))
 
 
@@ -772,7 +799,9 @@ def main():
     p = sub.add_parser("receipt"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int); p.set_defaults(fn=cmd_receipt)
     p = sub.add_parser("clear-free"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int, required=True); p.set_defaults(fn=cmd_clear_free)
     p = sub.add_parser("lint"); p.add_argument("files", nargs="+"); p.set_defaults(fn=cmd_lint)
-    p = sub.add_parser("migrate"); p.add_argument("slug"); p.add_argument("source"); p.add_argument("--answers"); p.set_defaults(fn=cmd_migrate)
+    p = sub.add_parser("migrate"); p.add_argument("slug"); p.add_argument("source"); p.add_argument("--answers")
+    p.add_argument("--unattributed", choices=("owner", "unknown"), default="unknown", help="whose the 1.x answers without a `by` are")
+    p.set_defaults(fn=cmd_migrate)
     p = sub.add_parser("status"); p.add_argument("slug", nargs="?"); p.set_defaults(fn=cmd_status)
     p = sub.add_parser("capabilities"); p.set_defaults(fn=cmd_capabilities)
     p = sub.add_parser("render"); p.add_argument("slug"); p.set_defaults(fn=cmd_render)
