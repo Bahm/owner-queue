@@ -10,7 +10,8 @@ ${XDG_CACHE_HOME:-~/.cache}/owner-queue/<slug>/state.json.
     queue.py bind SLUG --url URL --artifact-id ID --owner UID --version V   after the first publish
     queue.py published SLUG VERSION_ID           record a version this session published
     queue.py verify SLUG VERSION_ID              before acting on a wake: is the live page still ours?
-    queue.py config SLUG [--lede HTML] [--eyebrow T] [--person UID=LABEL] [--sound S] [--panels FILE]
+    queue.py config SLUG [--lede HTML] [--eyebrow T] [--sound S] [--panels FILE]
+                         [--delegate "WHAT COLLABORATORS MAY DECIDE"] [--undelegate]
                          [--unsafe-unattended-wake] [--unsafe-collaborator-wake] [--safe] [--version N]
     queue.py ask SLUG ITEM.json [--version N] [--reask]   add a question, or change one
     queue.py close SLUG ID --outcome TEXT [--undo TEXT] --version N
@@ -39,6 +40,7 @@ RULES = [
     {"path": "people", "read": "view", "write": "owner"},
     {"path": "people/{self}", "write": "interact"},
 ]
+NOT_DELEGABLE = re.compile(r"\b(unsafe|wake|download|push|publish|deploy|delet|permission|owner)", re.I)
 CAPABILITIES = {"db": {"rules": RULES}, "user": {"scopes": ["profile"]}, "downloads": {}}
 SOUNDS = ("chime", "beeps", "divine", "none")
 CHECKLIST = """Lint can't check these. Check each yourself before publishing:
@@ -203,10 +205,8 @@ def lint_item(item, state=None):
             cmd = str(s.get("command", ""))
             if re.search(r"(^|\s)(\./|\.\./)", cmd) or re.match(r"\s*(bash|python3?|node)\s+[A-Za-z0-9_-]+/", cmd):
                 warnings.append(f"{ref}: a step's command uses a relative path. Give the whole path from ~, or start with `cd ~/...`.")
-    if item.get("for") and state is not None:
-        known = {"owner"} | set((state.get("config") or {}).get("people", {}).values())
-        if item["for"] not in known:
-            warnings.append(f"{ref}: `for: {item['for']}` matches no one: use \"owner\" or a label given with `config --person`.")
+    if item.get("for") not in (None, "owner", "collaborator"):
+        errors.append(f"{ref}: `for` is \"owner\" or \"collaborator\".")
     for field in ("askedAt",):
         if field in item:
             t = parse_time(item[field])
@@ -280,7 +280,7 @@ def cmd_init(a):
         "url": None, "artifactId": None, "owner": None, "publishedVersions": [],
         "config": {"template": "owner-queue", "version": 2, "workstream": a.title,
                    "eyebrow": f"{a.title} · since {now():%Y-%m-%d}", "sound": a.sound or "chime",
-                   "people": {}, "unsafe": {"unattendedWake": False, "collaboratorWake": False}},
+                   "unsafe": {"unattendedWake": False, "collaboratorWake": False}},
         "configVersion": None,
     }
     state["config"]["queueKey"] = state["queueKey"]
@@ -347,11 +347,6 @@ def cmd_config(a):
         c["urgent"] = False
     if a.urgent:
         c.pop("urgent", None)
-    for pair in a.person or []:
-        uid, _, label = pair.partition("=")
-        if not uid.startswith("u_") or not label.strip():
-            die("--person takes UID=label, e.g. u_abc=the designer")
-        c.setdefault("people", {})[uid] = label.strip()
     if a.panels:
         panels = json.loads(Path(a.panels).read_text())
         errors, warnings = [], []
@@ -360,6 +355,16 @@ def cmd_config(a):
         if not report(errors, warnings, checklist=False):
             die("Not written.")
         c["panels"] = panels
+    if a.delegate is not None:
+        scope = a.delegate.strip()
+        if not scope or len(scope) > 200:
+            die("--delegate takes what collaborators may decide, in under 200 characters.")
+        if NOT_DELEGABLE.search(scope):
+            die("--delegate: the wake flags, permissions (downloads, pushes, publishing, deleting) and anything "
+                "outside the queue can't be delegated; only the owner's own answers decide them.")
+        c["delegated"] = scope
+    if a.undelegate:
+        c.pop("delegated", None)
     unsafe = c.setdefault("unsafe", {"unattendedWake": False, "collaboratorWake": False})
     if a.safe:
         unsafe.update(unattendedWake=False, collaboratorWake=False)
@@ -489,15 +494,12 @@ def cmd_answers(a):
     items = read_dir(root, "items")
     people = read_dir(root, "people")
     receipts = read_dir(root, "receipts")
-    labels = dict((state.get("config") or {}).get("people", {}))
     owner = state.get("owner")
 
     def who(uid):
-        if uid == owner:
-            return "the owner"
-        return labels.get(uid) or f"someone not named in config ({uid})"
+        return "the owner" if uid == owner else f"a collaborator ({uid})"
 
-    uids = sorted(set(people) | {p.name for p in (root / "people").glob("u_*") if p.is_dir()} | set(labels) | ({owner} if owner else set()))
+    uids = sorted(set(people) | {p.name for p in (root / "people").glob("u_*") if p.is_dir()} | ({owner} if owner else set()))
     if not items:
         print(f"No items under {root}/items: list collection `items` with out_dir {root} first.")
     missing = [u for u in uids if not (root / "people" / u / "answers").is_dir()]
@@ -657,7 +659,7 @@ def cmd_migrate(a):
             if old and (old.get("choice") or str(old.get("note", "")).strip()):
                 untaken.append(f"{ref} ({old.get('at', '')[:16].replace('T', ' ')})")
                 label = next((c["label"] for c in choices if c["key"] == old.get("choice")), old.get("choice") or "")
-                who = "the owner" if not old.get("by") or old.get("by") == state.get("owner") else state["config"].get("people", {}).get(old["by"], "")
+                who = "the owner" if not old.get("by") or old.get("by") == state.get("owner") else "a collaborator"
                 history.append({"who": who, "choiceLabel": label, "note": old.get("note", ""), "at": old.get("at", "")})
             item = {"ref": ref, "title": title or question or ref, "status": "open",
                     "ask": question or title or ref,
@@ -725,7 +727,7 @@ def cmd_status(a):
     s = load_state(a.slug)
     u = s["config"].get("unsafe", {})
     print(json.dumps({"title": s["title"], "url": s.get("url"), "artifactId": s.get("artifactId"), "queueKey": s["queueKey"],
-                      "owner": s.get("owner"), "nextRef": f"{s['prefix']}{s['next']}", "people": s["config"].get("people", {}),
+                      "owner": s.get("owner"), "nextRef": f"{s['prefix']}{s['next']}",
                       "unattendedWake": bool(u.get("unattendedWake")), "collaboratorWake": bool(u.get("collaboratorWake")),
                       "lastPublished": (s.get("publishedVersions") or [None])[-1], "configVersion": s.get("configVersion")}, indent=1))
 
@@ -752,9 +754,11 @@ def main():
     p = sub.add_parser("published"); p.add_argument("slug"); p.add_argument("version"); p.set_defaults(fn=cmd_published)
     p = sub.add_parser("verify"); p.add_argument("slug"); p.add_argument("version"); p.set_defaults(fn=cmd_verify)
     p = sub.add_parser("config"); p.add_argument("slug"); p.add_argument("--lede"); p.add_argument("--eyebrow")
-    p.add_argument("--sound", choices=SOUNDS); p.add_argument("--person", action="append"); p.add_argument("--panels")
+    p.add_argument("--sound", choices=SOUNDS); p.add_argument("--panels")
     p.add_argument("--no-urgent", action="store_true"); p.add_argument("--urgent", action="store_true")
     p.add_argument("--unsafe-unattended-wake", action="store_true"); p.add_argument("--unsafe-collaborator-wake", action="store_true")
+    p.add_argument("--delegate", help='what collaborators may decide, e.g. "how their own questions are worded"')
+    p.add_argument("--undelegate", action="store_true", help="end the standing permission")
     p.add_argument("--safe", action="store_true"); p.add_argument("--version", type=int); p.set_defaults(fn=cmd_config)
     p = sub.add_parser("ask"); p.add_argument("slug"); p.add_argument("file"); p.add_argument("--version", type=int)
     p.add_argument("--reask", action="store_true"); p.add_argument("--id"); p.set_defaults(fn=cmd_ask)

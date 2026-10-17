@@ -36,7 +36,7 @@ If another command already uses the name, run it as `/owner-queue:owner-queue`.
 - **Panels:** for example a playable test build, or a zip of reference files to download.
 - **Scheduled**, **Anything else** (free text, as long as you like), **For information** (Claude's status, 48 hours of it), and **Done**.
 - **A sticky bar** with progress, Submit answers, Ping me on updates (each queue can have its own sound), and Copy all answers.
-- **Other people:** answers from people you share the queue with show beside yours, labelled by role ("The designer"). A question can say who decides it.
+- **Other people:** answers from people you share the queue with show beside yours, under their claude.ai names. A question can say who decides it: you, or collaborators.
 - **Asking again:** when Claude re-asks a question, the earlier answers move under Previous answers.
 
 ## Submit and waking a session
@@ -63,6 +63,11 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - Multi-line notes kept in the browser until saved, Copy all answers, Previous answers, and a ping on updates.
 - Pictures and builds are files beside the page, never data pasted in.
 - `queue.py` replaces `render_page.py`, and adds lint and migration from 1.x.
+
+## Changes in 2.1
+
+- A collaborator's request to change how the queue works goes to you as a question, unless you gave collaborators a standing permission for that kind of decision (`queue.py config --delegate`, shown on the page). The wake flags, permissions and anything outside the queue can't be delegated.
+- Questions are for `"owner"` or `"collaborator"`; people show under their claude.ai names. `--person` and its role labels are gone.
 
 ## License
 

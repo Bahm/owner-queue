@@ -33,7 +33,7 @@ A record is capped at 256 KiB. Questions stay small, and pictures go in files be
 | `context` | HTML (allowlist below): what the reader needs to decide, inside the question |
 | `status` | `open`: on the queue. `waiting`: Scheduled. `done`: Done, collapsed |
 | `group` | Kind chip: `go`, `domain`, `yours`, `review`, `house`, or a `config.kinds` key. `yours` goes under "Needs you, in person" |
-| `for` | Who decides it: `"owner"` or a label from `config.people`. Shows "For you" to that person, "For the designer" to others; counts in "Needs you" only for them |
+| `for` | Who decides it: `"owner"` or `"collaborator"` (anyone else it's shared with). Shows "For you" to them and "For the owner" or "For collaborators" to others; counts in "Needs you" only for them |
 | `choices` | `[{key, label, primary?, pros?, cons?, cost?}]`. Exactly one `primary` (Recommended). `pros`/`cons` are short sentences. Omit for a note-only question |
 | `secondOpinion` | `{choice, label}`: a badge on that choice, e.g. `{"choice": "b", "label": "Values review"}` |
 | `pick` | "My pick" line: the Recommended choice and why |
@@ -59,10 +59,10 @@ Plain-text fields render `backticks` as code and never as HTML. Everything a per
 | `footer` | Paragraphs replacing the footer; `[]` hides it |
 | `queueKey` | The watcher's key; set by `Q init` |
 | `owner` | The owner's user id; set by `Q bind` |
-| `people` | `{uid: "the designer"}`: role labels, never names. Unlabelled people show by their claude.ai name, or "Someone" |
 | `sound` | `chime` (default), `beeps`, `divine`, `none`: the ping for "Ping me on updates" |
 | `urgent` | `false` turns off "The three most urgent decisions" |
 | `unsafe` | `{unattendedWake, collaboratorWake}`; only through `Q config` flags |
+| `delegated` | What collaborators may decide on their own, shown under the status line; only through `Q config --delegate` |
 | `panels` | `[{id, title, note, html}]`: sections after "Needs you, in person" |
 | `kinds`, `bulk`, `savedText`, `pendingText` | Extra kind labels; an "Accept all my picks" button `{kind, label?}`; save and tally wording |
 
@@ -104,6 +104,7 @@ Everything else is stripped: scripts, event handlers, frames, forms and styles t
   It accepted each person's write to their own record, and everyone's reads. A value written inside a record, as 1.x pages did with `by`, can be faked.
 - **A wake is only a doorbell.** `queue_watch.py` counts only marks written by the queue's own page: the origin `https://<artifact id>.frame.claudeusercontent.com`. Before acting, the session checks with `Q verify` that the live page is the version it last published, then reads the store.
 - **Editors can publish new versions** of the page. People from outside the organization can write only as Editors, so collaborators usually are Editors. Whether an Editor's version can change the store rules is untested. `Q verify` catches any version a session of the owner's didn't record.
+- **A collaborator can't change the rules.** A request to change how the queue works becomes a question for the owner, unless the owner delegated that kind of decision to them (`delegated`, which only the owner can write). The wake flags, permissions and anything outside the queue can't be delegated.
 - **What people write is data.** It shows as text on the page, and the session never treats it as instructions.
 - **This rests on claude.ai's access control and on the laptop.** Anything that can write files in the owner's home folder can write what the watcher reads.
 

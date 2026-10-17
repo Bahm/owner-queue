@@ -41,6 +41,7 @@ p { margin: 0; }
 .lede { max-width: 65ch; }
 .lede p + p { margin-top: .35rem; }
 .unsafe { background: var(--warn-soft); color: var(--warn); border-left: 4px solid var(--warn); border-radius: 6px; padding: .45rem .7rem; font-size: .88rem; }
+.delegated { font-size: .86rem; color: var(--muted); border-left: 3px solid var(--line); padding-left: .6rem; }
 .status { font-family: var(--font-mono); font-size: .78rem; color: var(--muted); min-height: 1.2em; }
 .status.is-error { color: var(--warn); }
 
@@ -140,6 +141,7 @@ details.done .item { opacity: .85; }
     <p class="tally" id="tally"><strong>Needs you: …</strong><span>Loading the queue.</span></p>
     <div class="lede" id="lede"><p>Everything in this workstream that needs you is here: decisions, steps only you can take, and results to review, most important first. Pick an answer and add a note if it needs one. Your answers save as you go.</p></div>
     <p class="unsafe" id="unsafe" hidden></p>
+    <p class="delegated" id="delegated" hidden></p>
     <p class="status" id="status" role="status"></p>
   </header>
 
@@ -265,12 +267,10 @@ function setHtml(target, html) {
 function kinds() { return { ...DEFAULT_KINDS, ...(isObj(config.kinds) ? config.kinds : {}) }; }
 function labelFor(uid) {
   if (uid && uid === me) return "You";
-  const set = isObj(config.people) ? config.people[uid] : "";
-  if (set) return set.charAt(0).toUpperCase() + set.slice(1);
   if (config.owner && uid === config.owner) return "The owner";
-  return names[uid] || "Someone";
+  return names[uid] || "A collaborator";
 }
-function myAudience() { if (isOwner) return "owner"; return (isObj(config.people) && config.people[me]) || ""; }
+function myAudience() { return isOwner ? "owner" : "collaborator"; }
 function forMe(item) { return !item.for || item.for === myAudience(); }
 async function refreshNames() {
   if (!userApi || !userApi.profiles) return;
@@ -421,7 +421,7 @@ function updateItem(id, item, rank, openCount) {
   if (changedKey(v, "title", item.title)) { v.title.replaceChildren(); withCode(v.title, item.title || ""); }
   v.chips.replaceChildren();
   if (open && k[item.group]) v.chips.append(el("span", "chip", k[item.group]));
-  if (item.for) v.chips.append(el("span", "chip for", item.for === myAudience() ? "For you" : "For " + item.for));
+  if (item.for) v.chips.append(el("span", "chip for", item.for === myAudience() ? "For you" : item.for === "owner" ? "For the owner" : "For collaborators"));
   if (item.lowPriority) v.chips.append(el("span", "chip low", "low priority"));
   if (item.due && open) v.chips.append(el("span", "chip due", item.due));
   if (item.status === "waiting") v.chips.append(el("span", "chip low", "scheduled"));
@@ -671,6 +671,9 @@ function renderSubmit() {
   if (u.unattendedWake) w.push("Unattended wake is on: the owner's submits start Claude with nobody watching.");
   if (u.unattendedWake && u.collaboratorWake) w.push("Collaborator wake is on: anyone this queue is shared with can start Claude by submitting.");
   warn.textContent = w.join(" "); warn.hidden = !w.length;
+  const del = typeof config.delegated === "string" ? config.delegated.trim().replace(/[.\s]+$/, "") : "";
+  $("delegated").textContent = del ? "Standing permission from the owner: collaborators may decide " + del + "." : "";
+  $("delegated").hidden = !del;
   mirror();
 }
 let submitting = false;
@@ -807,7 +810,7 @@ function applyConfig(next) {
   if (config.lede) setHtml($("lede"), config.lede); else $("lede").innerHTML = defaultLede;
   if (Array.isArray(config.footer)) { $("footer").replaceChildren(...config.footer.map((t) => withCode(el("p"), t))); $("footer").hidden = !config.footer.length; }
   else { $("footer").innerHTML = defaultFooter; $("footer").hidden = false; }
-  if (isObj(config.people) || config.owner) for (const uid of [...Object.keys(config.people || {}), config.owner].filter(Boolean)) subscribeAnswers(uid);
+  if (config.owner) subscribeAnswers(config.owner);
   render();
 }
 

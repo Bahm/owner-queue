@@ -104,14 +104,24 @@ class QueueScript(unittest.TestCase):
         self.init()
         r = self.run_q("config", "t", "--unsafe-collaborator-wake", ok=False)
         self.assertIn("needs --unsafe-unattended-wake", r.stderr)
-        r = self.run_q("config", "t", "--unsafe-unattended-wake", "--unsafe-collaborator-wake", "--person", "u_des=the designer", "--version", "2")
+        r = self.run_q("config", "t", "--unsafe-unattended-wake", "--unsafe-collaborator-wake", "--version", "2")
         cfg = json.loads(Path(self.writes(r)[0]["file_path"]).read_text())
         self.assertEqual(cfg["unsafe"], {"unattendedWake": True, "collaboratorWake": True})
-        self.assertEqual(cfg["people"], {"u_des": "the designer"})
         self.assertIn("queue_watch.py --key t-", r.stdout)
         r = self.run_q("config", "t", "--safe", "--version", "3")
         cfg = json.loads(Path(self.writes(r)[0]["file_path"]).read_text())
         self.assertEqual(cfg["unsafe"], {"unattendedWake": False, "collaboratorWake": False})
+
+    def test_delegate(self):
+        self.init()
+        r = self.run_q("config", "t", "--delegate", "how their own questions are worded", "--version", "2")
+        cfg = json.loads(Path(self.writes(r)[0]["file_path"]).read_text())
+        self.assertEqual(cfg["delegated"], "how their own questions are worded")
+        for scope in ("turning on unattended wake", "downloads from the queue", "pushing to main", "anything the owner decides"):
+            r = self.run_q("config", "t", "--delegate", scope, "--version", "3", ok=False)
+            self.assertIn("can't be delegated", r.stderr, scope)
+        r = self.run_q("config", "t", "--undelegate", "--version", "3")
+        self.assertNotIn("delegated", json.loads(Path(self.writes(r)[0]["file_path"]).read_text()))
 
     def test_verify(self):
         self.init()
@@ -136,7 +146,6 @@ class QueueScript(unittest.TestCase):
 
     def test_answers_summary(self):
         self.init()
-        self.run_q("config", "t", "--person", "u_des=the designer", "--version", "2")
         d = self.tmp / "dump"
         def put(path, body):
             p = d / f"{path}.json"; p.parent.mkdir(parents=True, exist_ok=True); p.write_text(json.dumps(body))
@@ -147,7 +156,7 @@ class QueueScript(unittest.TestCase):
         put("people/u_des/answers/g2", {"choice": "8", "choiceLabel": "8 m", "note": "", "at": iso(20)})
         put("people/u_des/answers/anything-else", {"note": "A long report " * 100, "at": iso(5)})
         out = self.run_q("answers", "t", d).stdout
-        self.assertIn("the designer: SUBMITTED, not yet read", out)
+        self.assertIn("a collaborator (u_des): SUBMITTED, not yet read", out)
         self.assertIn("can't wake a session", out)
         self.assertIn("G1 Height level: 16 m", out)
         self.assertNotIn("G2", out, "an answer older than the question isn't current")

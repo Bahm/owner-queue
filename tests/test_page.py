@@ -28,11 +28,11 @@ def seed():
     asked = iso(60)
     return {
         "config/page": {"template": "owner-queue", "version": 2, "queueKey": "test-1234", "owner": "u_owner",
-                        "people": {"u_des": "the designer"}, "unsafe": {"unattendedWake": False, "collaboratorWake": False}},
+                        "unsafe": {"unattendedWake": False, "collaboratorWake": False}},
         "items/g1": decision("G1", 1, asked, context="<p>Heights run from <b>-1</b> to 3.</p>"),
         "items/g2": decision("G2", 2, asked),
         "items/g3": decision("G3", 3, asked),
-        "items/g4": decision("G4", 4, asked, **{"for": "the designer"}),
+        "items/g4": decision("G4", 4, asked, **{"for": "collaborator"}),
         "items/g5": {"ref": "G5", "title": "Plug in the phone", "group": "yours", "status": "open", "priority": 5,
                      "priorityReason": "The check needs the real phone.", "askedAt": asked,
                      "needs": "Your phone, unlocked, for two minutes.",
@@ -100,8 +100,8 @@ class PageTest(unittest.TestCase):
         self.assertEqual(p.locator("#section-waiting .item .ref").all_inner_texts(), ["G6"])
         self.assertIn("Done (1)", self.text("#done-summary"))
         self.assertIn("priority 1 of 5", self.text("#item-g1 .priority").lower())
-        self.assertIn("For the designer", self.text("#item-g4 .chips"))
-        self.assertIn("Needs you: 4", self.text("#tally"), "G4 is for the designer, so it doesn't count for the owner")
+        self.assertIn("For collaborators", self.text("#item-g4 .chips"))
+        self.assertIn("Needs you: 4", self.text("#tally"), "G4 is for collaborators, so it doesn't count for the owner")
         self.assertIn("recommended", self.text("#item-g1 .opts").lower())
         self.assertIn("Copy prompt", self.text("#item-g5"))
 
@@ -161,7 +161,7 @@ class PageTest(unittest.TestCase):
         data["people/u_des/answers/g4"] = {"choice": "a", "choiceLabel": "G4 option A", "note": "fine by me", "at": iso(2)}
         data["people/u_des/answers/anything-else"] = {"note": "Report: it got stuck twice.", "at": iso(2)}
         p = self.open(data)
-        self.assertIn("The designer:", self.text("#item-g4 .others"))
+        self.assertIn("A collaborator:", self.text("#item-g4 .others"))
         self.assertIn("fine by me", self.text("#item-g4 .others"))
         self.assertIn("Report: it got stuck twice.", self.text("#others-anything-else"))
         p.fill("#note-anything-else", "Please prioritise G1.")
@@ -196,7 +196,7 @@ class PageTest(unittest.TestCase):
         self.assertIn("Unattended wake is on", self.text("#unsafe"))
         mark = json.loads(p.evaluate("localStorage.getItem('owner-queue:test-1234:submitted')"))
         self.assertFalse(mark["ready"], "the designer's submit doesn't wake without the collaborator flag")
-        self.assertIn("The designer submitted", self.text("#submitLine"))
+        self.assertIn("A collaborator submitted", self.text("#submitLine"))
         p.click("#submitBtn")
         p.wait_for_timeout(200)
         mark = json.loads(p.evaluate("localStorage.getItem('owner-queue:test-1234:submitted')"))
@@ -222,6 +222,17 @@ class PageTest(unittest.TestCase):
         self.assertTrue(self.store("people/u_des")["submittedAt"])
         self.assertIn("The owner sees this and passes it on", self.text("#submitLine"))
         self.assertIsNone(p.evaluate("localStorage.getItem('owner-queue:test-1234:submitted')"), "only the owner's copy mirrors")
+
+    def test_standing_permissions_show(self):
+        data = seed()
+        data["config/page"]["delegated"] = "how their own questions are worded"
+        p = self.open(data)
+        self.assertIn("Standing permission from the owner: collaborators may decide how their own questions are worded.", self.text("#delegated"))
+        data["config/page"]["delegated"] = "<img src=x onerror=\"window.__pwned=1\">"
+        p.evaluate("(d) => window.__mock.set('config/page', d)", data["config/page"])
+        p.wait_for_timeout(150)
+        self.assertIsNone(p.evaluate("window.__pwned || null"))
+        self.assertIn("<img", self.text("#delegated"), "shown as text")
 
     def test_refused_write_turns_read_only(self):
         p = self.open()
