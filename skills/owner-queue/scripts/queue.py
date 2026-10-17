@@ -315,8 +315,7 @@ def cmd_config_saved(a):
 
 def cmd_published(a):
     state = load_state(a.slug)
-    if a.version not in state["publishedVersions"]:
-        state["publishedVersions"].append(a.version)
+    state["publishedVersions"] = [v for v in state["publishedVersions"] if v != a.version] + [a.version]
     save_state(state)
     print(f"Recorded {a.version} as published by you. {len(state['publishedVersions'])} known.")
 

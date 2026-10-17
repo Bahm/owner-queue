@@ -131,6 +131,8 @@ class QueueScript(unittest.TestCase):
         self.run_q("published", "t", "v2")
         r = self.run_q("verify", "t", "v1", ok=False)
         self.assertIn("older version", r.stderr)
+        self.run_q("published", "t", "v1")
+        self.assertIn("OK", self.run_q("verify", "t", "v1").stdout, "recording a known version again makes it the latest")
 
     def test_fyi_and_prune(self):
         self.init()
