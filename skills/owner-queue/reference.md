@@ -1,4 +1,4 @@
-# Owner Queue 2.0 reference
+# Owner Queue 2.x reference
 
 ## The store
 
@@ -88,6 +88,10 @@ Answers save as typed: choices at once, notes 0.8 s after the last keystroke, on
 - `<button data-play="game/godgame.html">Play here</button>` opens that file in a frame below the button, on click only.
 - `<button data-save="hand/rest.png">Download</button>` saves one file through the downloads capability.
 - `<button data-save-zip="charts.zip" data-files="hand/a.png hand/b.png">Download all</button>` packs the files into one zip.
+
+## Links between questions
+
+The page links every question number it finds in a question's text, notes, For information, the status line and panels: `G51` on a queue with a prefix; `q224`, `#224` or `question 224` on one without. Only numbers of questions in the store link, and never inside `code`, `pre`, links or buttons. A click scrolls to the question, opening Done if it's there. Each question shows "Referenced by": the questions and For information entries (last 48 hours) that name it. Put what the reader needs inside the question anyway; a link is a jump, and `Q ask` warns when a context is mostly a pointer.
 
 ## HTML allowlist
 

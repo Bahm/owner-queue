@@ -118,6 +118,10 @@ textarea.has-text { border-color: var(--accent); }
 .answer-line .said { white-space: pre-wrap; overflow-wrap: anywhere; }
 .stamp { font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .source { font-family: var(--font-mono); font-size: .76rem; color: var(--muted); overflow-wrap: anywhere; }
+a.qref { font-weight: 600; text-decoration-style: dotted; text-underline-offset: .15em; }
+.refby { display: flex; flex-wrap: wrap; gap: .1rem .65rem; align-items: baseline; font-size: .84rem; color: var(--muted); }
+.refby .label { margin-right: 0; }
+.item.flash, .feed li.flash { box-shadow: 0 0 0 3px var(--accent); transition: box-shadow .3s; }
 .item.is-answered .ask, .item.is-answered .context, .item.is-answered .opt-cost, .item.is-answered .case { color: var(--quiet); }
 
 .panel, .feed { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: .9rem 1rem; display: grid; gap: .5rem; min-width: 0; }
@@ -131,7 +135,7 @@ details.done .item { opacity: .85; }
 .placeholder strong { color: var(--ink); }
 .footer { font-size: .84rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: .8rem; display: grid; gap: .35rem; }
 #copyOut { width: 100%; min-height: 12rem; font-family: var(--font-mono); font-size: .8rem; }
-@media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .fill, .item.flash, .feed li.flash { transition: none; } }
 </style>
 
 <div class="wrap">
@@ -285,6 +289,81 @@ async function refreshNames() {
 }
 
 // ---- answers ---------------------------------------------------------------
+// ---- links between questions ------------------------------------------------
+// A question's number anywhere in the page (G51; in a queue without a prefix, q224, #224 or "question 224") links to
+// that question, and each question lists the questions and For information entries that name it. Only numbers of
+// questions in the store link. Links are made here, after the allowlist, never from the store's HTML.
+const REF_SKIP = new Set(["a", "code", "pre", "kbd", "button", "textarea", "script", "style"]);
+let refIndex = { re: null, ids: new Map() };
+let refBy = new Map();              // itemId -> [{item} | {feed}, label]
+function buildRefIndex() {
+  const ids = new Map(), named = [];
+  for (const [id, it] of items) {
+    const r = String(it.ref || "").trim(); if (!r) continue;
+    ids.set(r.toLowerCase(), id);
+    if (!/^\d+$/.test(r)) named.push(r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  }
+  named.sort((a, b) => b.length - a.length);
+  const numbered = "\\b(?:[qQ]|[qQ]uestions?\\s+|#)(\\d+)\\b";
+  refIndex = { re: new RegExp((named.length ? "\\b(" + named.join("|") + ")\\b|" : "\\b()\\B\\b|") + numbered, "g"), ids };
+}
+function refTarget(m) { return refIndex.ids.get(String(m[1] || m[2] || "").toLowerCase()) || null; }
+function refsIn(text) {
+  const found = []; if (!refIndex.re) return found;
+  const re = new RegExp(refIndex.re.source, "g"); let m;
+  while ((m = re.exec(String(text ?? "")))) { const id = refTarget(m); if (id && !found.includes(id)) found.push(id); }
+  return found;
+}
+function refLink(text, target) {
+  const a = el("a", "qref", text);
+  if (target.item) { a.href = "#item-" + target.item; a.dataset.item = target.item; } else { a.href = "#feed-" + target.feed; a.dataset.feed = target.feed; }
+  return a;
+}
+function linkRefs(root, selfId) {
+  if (!refIndex.re || !root) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode(n) {
+    for (let p = n.parentElement; p && p !== root.parentElement; p = p.parentElement) if (REF_SKIP.has(p.localName)) return NodeFilter.FILTER_REJECT;
+    return NodeFilter.FILTER_ACCEPT;
+  } });
+  const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    const text = node.nodeValue, re = new RegExp(refIndex.re.source, "g"); let m, last = 0, out = null;
+    while ((m = re.exec(text))) {
+      const id = refTarget(m); if (!id || id === selfId) continue;
+      out = out || document.createDocumentFragment();
+      if (m.index > last) out.append(text.slice(last, m.index));
+      out.append(refLink(m[0], { item: id })); last = m.index + m[0].length;
+    }
+    if (out) { if (last < text.length) out.append(text.slice(last)); node.replaceWith(out); }
+  }
+}
+// The text a reference can sit in, as linkRefs sees it: code, commands and the prompt to paste don't count.
+function plainText(html) { return String(html ?? "").replace(/<(code|pre|kbd|a|button)\b[\s\S]*?<\/\1\s*>/gi, " ").replace(/<[^>]*>/g, " "); }
+function prose(text) { return String(text ?? "").replace(/`[^`]*`/g, " "); }
+function itemText(it) {
+  const parts = [it.title, it.ask, plainText(it.context), it.pick, it.priorityReason, it.effort, it.cost, it.undo, it.unblocks, it.outcome, it.needs];
+  for (const s of arr(it.steps)) parts.push(s && s.text);
+  for (const c of arr(it.choices)) parts.push(c.label, c.cost, ...arr(c.pros), ...arr(c.cons));
+  return parts.filter(Boolean).map(prose).join("\n");
+}
+function buildRefBy() {
+  const by = new Map(), add = (id, entry) => { if (!by.has(id)) by.set(id, []); by.get(id).push(entry); };
+  for (const [id, it] of sorted()) for (const t of refsIn(itemText(it))) if (t !== id) add(t, { item: id, label: it.ref || it.title || id });
+  for (const [fid, f] of feedKept()) for (const t of refsIn(plainText(f.html))) add(t, { feed: fid, label: "For information, " + when(f.at) });
+  refBy = by;
+}
+document.addEventListener("click", (event) => {
+  const a = event.target instanceof Element ? event.target.closest("a.qref") : null; if (!a) return;
+  event.preventDefault();
+  const target = a.dataset.item ? $("item-" + a.dataset.item) : $("feed-" + a.dataset.feed); if (!target) return;
+  const fold = target.closest("details"); if (fold && !fold.open) fold.open = true;
+  target.style.scrollMarginTop = ($("bar").offsetHeight + 12) + "px";
+  target.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  target.setAttribute("tabindex", "-1"); target.focus({ preventScroll: true });
+  target.classList.remove("flash"); void target.offsetWidth; target.classList.add("flash");
+  setTimeout(() => target.classList.remove("flash"), 1600);
+});
+
 function isCurrent(item, answer) { return Boolean(answer) && (!item || !item.askedAt || String(answer.at || "") >= String(item.askedAt)); }
 function hasContent(item, a) { if (!a) return false; const choices = arr(item && item.choices); return Boolean(a.choice || (!choices.length && String(a.note || "").trim())); }
 function answerOf(uid, id) { return (answers.get(uid) || new Map()).get(id) || null; }
@@ -389,9 +468,9 @@ function itemView(id) {
   clear.type = "button"; boxLabel.append(noteText, clear);
   const note = el("textarea"); note.id = "note-" + id; note.rows = 2; boxLabel.htmlFor = note.id;
   const saved = el("div", "saved"); saved.id = "saved-" + id;
-  const others = el("div", "others"), history = el("div", "history"), source = el("p", "source");
-  root.append(head, priority, ask, context, opts, pick, meta, needs, steps, prompt, boxLabel, note, saved, others, history, source);
-  v = { root, ref, title, chips, priority, ask, context, opts, pick, meta, needs, steps, prompt, boxLabel, noteText, clear, note, saved, others, history, source, keys: {} };
+  const others = el("div", "others"), history = el("div", "history"), source = el("p", "source"), refby = el("p", "refby");
+  root.append(head, priority, ask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, note, saved, others, history, source);
+  v = { root, ref, title, chips, priority, ask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, noteText, clear, note, saved, others, history, source, keys: {} };
   note.addEventListener("input", () => noteChanged(id));
   note.addEventListener("blur", () => { if (pending.has(id)) { clearTimeout(pending.get(id)); pending.delete(id); const d = drafts.get(id); if (d) saveMine(id, d); } });
   clear.addEventListener("click", () => { clearTimeout(pending.get(id)); pending.delete(id); note.value = ""; saveMine(id, { choice: "", choiceLabel: "", note: "", at: nowIso() }); });
@@ -509,6 +588,10 @@ function updateItem(id, item, rank, openCount) {
   v.history.hidden = !hist.length;
   v.source.textContent = item.source ? "Source: " + item.source : "";
   v.source.hidden = !item.source;
+  const rb = refBy.get(id) || [];
+  if (changedKey(v, "refby", rb)) { v.refby.replaceChildren(); if (rb.length) v.refby.append(el("span", "label", "Referenced by"), ...rb.map((r) => refLink(r.label, r))); }
+  v.refby.hidden = !rb.length;
+  linkRefs(v.root, id);
   return v.root;
 }
 
@@ -553,6 +636,7 @@ function render() {
   if (!loaded.items) return;
   $("placeholder")?.remove();
   if (!sectionViews.size) buildSections();
+  buildRefIndex(); buildRefBy();
   const all = sorted();
   const open = all.filter(([, it]) => sectionOf(it) === "open");
   const ranks = new Map(open.map(([id], i) => [id, i + 1]));
@@ -580,6 +664,7 @@ function render() {
   if (!open.length) sectionViews.get("open").list.replaceChildren(el("p", "blurb", "Nothing is open right now. New questions appear here as they're added."));
   renderPanels();
   renderFree(); renderFeed(); renderTally(open); renderSubmit(); renderBulk(open);
+  for (const node of [$("lede"), $("feed-list"), $("others-anything-else"), sectionViews.get("panels").list]) linkRefs(node);
 }
 
 function renderTally(open) {
@@ -631,13 +716,17 @@ function renderFree() {
 }
 
 // ---- For information -------------------------------------------------------
+function feedKept() {
+  if (!loaded.feed) return [];
+  const now = Date.now();
+  return [...feed.entries()].filter(([, f]) => now - Date.parse(f.at) < FEED_HOURS * 3600e3).sort(([, a], [, b]) => Date.parse(b.at) - Date.parse(a.at));
+}
 function renderFeed() {
   if (!loaded.feed) return;
-  const now = Date.now();
-  const keep = [...feed.values()].filter((f) => now - Date.parse(f.at) < FEED_HOURS * 3600e3).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const keep = feedKept();
   const list = $("feed-list");
-  if (!changedKey(feedKeys, "feed", keep.map((f) => [f.at, f.html]))) return;
-  list.replaceChildren(...keep.map((f) => { const li = el("li"); li.append(el("span", "stamp", when(f.at) + "  ")); const body = setHtml(el("span"), f.html); li.append(body); return li; }));
+  if (!changedKey(feedKeys, "feed", keep.map(([fid, f]) => [fid, f.at, f.html]))) return;
+  list.replaceChildren(...keep.map(([fid, f]) => { const li = el("li"); li.id = "feed-" + fid; li.append(el("span", "stamp", when(f.at) + "  ")); const body = setHtml(el("span"), f.html); li.append(body); return li; }));
   $("feed-empty").hidden = keep.length > 0;
   $("feed-section").hidden = false;
 }

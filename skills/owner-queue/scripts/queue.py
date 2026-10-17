@@ -195,6 +195,15 @@ def lint_item(item, state=None):
             warnings.append(f"{ref}: no `cost` (to build: work and tokens) on the question or its choices.")
         if not str(item.get("pick", "")).strip():
             warnings.append(f"{ref}: no `pick`: say which you recommend and why, in one line.")
+    if status == "open" and state is not None:
+        # The page links question numbers (O9), but a context that is only "see G51" makes the reader jump.
+        words = re.sub(r"\s+", " ", re.sub(r"<[^>]*>", " ", str(item.get("context", "")))).strip()
+        prefix = state.get("prefix", "")
+        pattern = re.compile(rf"\b{re.escape(prefix)}(\d+)\b" if prefix else r"\b(?:q|question\s+|#)(\d+)\b", 0 if prefix else re.I)
+        others = [m.group(0) for m in pattern.finditer(words) if m.group(0).lower() != str(ref).lower()]
+        if words and len(words) < 160 and others:
+            warnings.append(f"{ref}: its context is mostly a pointer to {others[0]}. Put what the reader needs to decide inside "
+                            f"this question (the owner, 2 October); the page links {others[0]}, but a link is a jump.")
     so = item.get("secondOpinion")
     if so and (not isinstance(so, dict) or so.get("choice") not in keys):
         errors.append(f"{ref}: `secondOpinion` must be {{choice: <a choice key>, label}}.")

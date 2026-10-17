@@ -99,6 +99,10 @@ class QueueScript(unittest.TestCase):
                  "priorityReason": "x", "steps": [{"text": "Run", "command": "./phone.sh"}]}
         r = self.run_q("lint", self.item_file(yours))
         self.assertIn("relative path", r.stdout)
+        pointer = {**GOOD, "context": "<p>See G3 for the details.</p>"}
+        r = self.run_q("ask", "t", self.item_file(pointer))
+        self.assertIn("mostly a pointer to G3", r.stdout)
+        self.assertNotIn("mostly a pointer", self.run_q("ask", "t", self.item_file(GOOD)).stdout)
 
     def test_flags(self):
         self.init()

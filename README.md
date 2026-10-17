@@ -69,6 +69,12 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - A collaborator's request to change how the queue works goes to you as a question, unless you gave collaborators a standing permission for that kind of decision (`queue.py config --delegate`, shown on the page). The wake flags, permissions and anything outside the queue can't be delegated.
 - Questions are for `"owner"` or `"collaborator"`; people show under their claude.ai names. `--person` and its role labels are gone.
 
+## Changes in 2.2
+
+- A question's number anywhere on the page (G51; on a queue without a prefix, q224, #224 or "question 224") links to that question, opening it under Done if it's there. Each question lists the questions and For information entries that name it, under "Referenced by". Numbers in code don't count.
+- Lint warns when a question's context is mostly a pointer to another question: the reader needs what they decide on inside the question.
+- You answer on the queue, even when you asked in chat: a request for options or pros and cons becomes questions there (2.1.4).
+
 ## License
 
 MIT

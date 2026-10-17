@@ -256,6 +256,40 @@ class PageTest(unittest.TestCase):
         self.assertIn("Updated at", self.text("#status"))
 
     # ---- safety ----
+    def test_question_numbers_link_and_referenced_by(self):
+        data = seed()
+        data["items/g1"]["context"] = "<p>Depends on G2 and on the old G7.</p><p><code>G3</code> stays code; G1 is itself.</p>"
+        data["feed/f1"]["html"] = "Took in G7."
+        p = self.open(data)
+        self.assertEqual(p.locator("#item-g1 .context a.qref").count(), 2)
+        self.assertEqual(p.locator("#item-g1 code a, #item-g1 .item-head a").count(), 0)
+        self.assertIn("G1", p.locator("#item-g2 .refby").inner_text())
+        self.assertTrue(p.locator("#item-g3 .refby").is_hidden())
+        seven = p.locator("#item-g7 .refby").text_content()
+        self.assertIn("G1", seven)
+        self.assertIn("For information", seven)
+        self.assertEqual(p.locator("#feed-list a.qref").count(), 1)
+        self.assertFalse(p.evaluate("document.getElementById('done').open"))
+        p.locator("#item-g1 .context a.qref", has_text="G7").click()
+        self.assertTrue(p.evaluate("document.getElementById('done').open"))
+        p.wait_for_timeout(700)
+        self.assertTrue(p.evaluate("(() => { const r = document.getElementById('item-g7').getBoundingClientRect();"
+                                   " return r.top >= document.getElementById('bar').offsetHeight && r.top < innerHeight; })()"))
+        p.locator("#item-g7 .refby a.qref", has_text="For information").click()
+        p.wait_for_timeout(700)
+        self.assertTrue(p.evaluate("(() => { const r = document.querySelector('#feed-list li[id]').getBoundingClientRect(); return r.top < innerHeight; })()"))
+        self.assertEqual(self.errors, [])
+
+    def test_plain_numbers_link_only_as_questions(self):
+        asked = iso(60)
+        data = {"config/page": {"template": "owner-queue", "version": 2, "queueKey": "t-1", "owner": "u_owner"},
+                "items/224": decision("224", 1, asked, context="<p>After question 225 (q225), not the 225 KB file or 224.</p>"),
+                "items/225": decision("225", 2, asked)}
+        p = self.open(data)
+        self.assertEqual(p.locator("#item-224 .context a.qref").all_inner_texts(), ["question 225", "q225"])
+        self.assertIn("224", p.locator("#item-225 .refby").inner_text())
+        self.assertEqual(self.errors, [])
+
     def test_html_is_sanitised_and_viewer_text_is_text(self):
         data = seed()
         data["items/g1"]["context"] = ('<p>ok</p><script>window.__pwned=1</script><img src=x onerror="window.__pwned=2">'
