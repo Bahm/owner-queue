@@ -705,7 +705,12 @@ def cmd_migrate(a):
                      "they show only as Previous answers.")
     free = old_answers.get("free")
     if free and str(free.get("note", "")).strip():
-        notes.append("WARNING: the old \"Anything else\" still holds a note. Take it in (and save it) before switching.")
+        if state.get("owner"):
+            out.add("set", f"people/{state['owner']}/answers", FREE_ID, {"note": free["note"], "at": free.get("at") or stamp()})
+            notes.append("The old \"Anything else\" note is carried over into the owner's Anything else, so it isn't lost.")
+        else:
+            notes.append("WARNING: the old \"Anything else\" still holds a note. Run migrate again after `bind` to carry it over, "
+                         "or take it in (and save it) before switching.")
     notes.append("Old answers stay in the store's `answers` collection; open questions carry them under Previous answers.")
     out.emit("\n".join(notes))
 

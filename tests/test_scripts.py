@@ -186,6 +186,10 @@ class QueueScript(unittest.TestCase):
         self.assertIn("not taken in yet: G58", r.stdout)
         self.assertIn("panel", r.stdout)
         self.assertIn('"nextRef": "G66"', self.run_q("status", "t").stdout)
+        (ans / "answers/free.json").write_text(json.dumps({"note": "Two things to consider.", "at": iso(600)}))
+        w = self.writes(self.run_q("migrate", "t", f, "--answers", ans))
+        carried = [x for x in w if x["collection"] == "people/u_owner/answers"]
+        self.assertEqual([x["doc_id"] for x in carried], ["anything-else"], "the old Anything else is carried over")
 
     def test_migrate_page_html(self):
         self.init(prefix="")
