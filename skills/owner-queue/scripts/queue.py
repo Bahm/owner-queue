@@ -1,0 +1,775 @@
+#!/usr/bin/env python3
+"""Owner Queue 2.0: the session's tool for one queue. Standard library only.
+
+It never talks to claude.ai. Each command writes the store records it changes as JSON files and prints the
+`writes` list to pass to ArtifactData `batch`, so the queue's content never passes through the conversation.
+State for each queue (its URL, key, owner, numbering, flags, last published version) lives in
+${XDG_CACHE_HOME:-~/.cache}/owner-queue/<slug>/state.json.
+
+    queue.py init TITLE [--prefix G] [--sound chime|beeps|divine|none]   render the page, start the state
+    queue.py bind SLUG --url URL --artifact-id ID --owner UID --version V   after the first publish
+    queue.py published SLUG VERSION_ID           record a version this session published
+    queue.py verify SLUG VERSION_ID              before acting on a wake: is the live page still ours?
+    queue.py config SLUG [--lede HTML] [--eyebrow T] [--person UID=LABEL] [--sound S] [--panels FILE]
+                         [--unsafe-unattended-wake] [--unsafe-collaborator-wake] [--safe] [--version N]
+    queue.py ask SLUG ITEM.json [--version N] [--reask]   add a question, or change one
+    queue.py close SLUG ID --outcome TEXT [--undo TEXT] --version N
+    queue.py wait SLUG ID [--due TEXT] --version N
+    queue.py fyi SLUG HTML|@FILE                  a "For information" entry, stamped now
+    queue.py prune SLUG [ID=VERSION ...]          no ids: print the query for old entries; ids: delete them
+    queue.py answers SLUG DIR                     summarise answers saved with ArtifactData out_dir under DIR
+    queue.py receipt SLUG UID [--version N]       "Claude read your answers"
+    queue.py clear-free SLUG UID --version N      empty someone's "Anything else" once taken in
+    queue.py lint FILE...                         check questions or feed entries against the rules
+    queue.py migrate SLUG SOURCE [--answers DIR]  turn a 1.x queue's content into 2.0 records
+    queue.py status SLUG | capabilities | render SLUG
+"""
+import argparse, datetime as dt, html, json, os, re, secrets, sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+TEMPLATE = HERE.parent / "assets" / "owner-queue.html"
+TOKEN = "__QUEUE_TITLE__"
+FREE_ID = "anything-else"
+FEED_HOURS = 48
+BATCH_MAX = 50
+CAP = 256 * 1024
+RULES = [
+    {"path": "", "read": "view", "write": "owner"},
+    {"path": "people", "read": "view", "write": "owner"},
+    {"path": "people/{self}", "write": "interact"},
+]
+CAPABILITIES = {"db": {"rules": RULES}, "user": {"scopes": ["profile"]}, "downloads": {}}
+SOUNDS = ("chime", "beeps", "divine", "none")
+CHECKLIST = """Lint can't check these. Check each yourself before publishing:
+  - Every claim and number checked against its source (code, measurement, report); estimates say so.
+  - Every term the reader hasn't used is defined or replaced; one real example per abstract point.
+  - Limits stated next to the claims they limit. The owner's earlier answers cited for no more than they said.
+  - For the designer or a collaborator: their terms, nothing technical; an approach goes to them before it's built.
+  - It matches what was actually asked for, and its context sits inside it, not in a "read first" block."""
+
+
+# ---- small helpers -----------------------------------------------------------
+def now():
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def stamp(t=None):
+    """UTC in the page's own format (toISOString), so string comparisons on the page are exact."""
+    t = t or now()
+    return t.strftime("%Y-%m-%dT%H:%M:%S.") + f"{t.microsecond // 1000:03d}Z"
+
+
+def parse_time(s):
+    if not isinstance(s, str) or not s.endswith("Z"):
+        return None
+    try:
+        return dt.datetime.fromisoformat(s[:-1] + "+00:00")
+    except ValueError:
+        return None
+
+
+def slug_of(title):
+    return re.sub(r"[\W_]+", "-", title.lower()).strip("-") or "queue"
+
+
+def cache_root():
+    home = os.environ.get("XDG_CACHE_HOME", "")
+    return (Path(home) if os.path.isabs(home) else Path.home() / ".cache") / "owner-queue"
+
+
+def die(msg):
+    sys.stdout.flush()
+    sys.exit(msg)
+
+
+def load_state(slug):
+    path = cache_root() / slug / "state.json"
+    if not path.exists():
+        die(f"No queue '{slug}' here ({path}). Run `queue.py init` first, or `queue.py status` to list queues.")
+    return json.loads(path.read_text())
+
+
+def save_state(state):
+    path = cache_root() / state["slug"] / "state.json"
+    path.write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n")
+
+
+def strip_tags(s):
+    return html.unescape(re.sub(r"<[^>]+>", "", str(s or ""))).strip()
+
+
+class Out:
+    """Collects store writes as files and prints them as ArtifactData batch `writes`, 50 at a time."""
+
+    def __init__(self, state, label):
+        self.state = state
+        self.dir = cache_root() / state["slug"] / "out" / (now().strftime("%Y%m%dT%H%M%S%f") + "-" + label)
+        self.writes = []
+
+    def add(self, op, collection, doc_id, data=None, version=None):
+        entry = {"op": op, "collection": collection, "doc_id": doc_id}
+        if data is not None:
+            path = self.dir / collection / f"{doc_id}.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(data, indent=1, ensure_ascii=False))
+            entry["file_path"] = str(path)
+            if len(json.dumps(data, ensure_ascii=False).encode()) > CAP - 8 * 1024:
+                die(f"{collection}/{doc_id} would be over the store's 256 KiB cap. Split it or move pictures to files.")
+        if version is not None:
+            entry["if_version"] = int(version)
+        self.writes.append(entry)
+
+    def emit(self, note=""):
+        if not self.writes:
+            print("Nothing to write.")
+            return
+        url = self.state.get("url") or "<the queue's URL: run `queue.py bind` after publishing>"
+        chunks = [self.writes[i:i + BATCH_MAX] for i in range(0, len(self.writes), BATCH_MAX)]
+        for n, chunk in enumerate(chunks, 1):
+            print(f"ArtifactData batch {n} of {len(chunks)}, url {url}, writes:")
+            print(json.dumps(chunk, ensure_ascii=False))
+        if note:
+            print(note)
+
+
+# ---- lint --------------------------------------------------------------------
+HTML_FIELDS = ("context", "html", "lede")
+BAD_HTML = [
+    (re.compile(r"<\s*script", re.I), "a <script> tag"),
+    (re.compile(r"\son[a-z]+\s*=", re.I), "an event-handler attribute (on...=)"),
+    (re.compile(r"javascript:", re.I), "a javascript: link"),
+    (re.compile(r"<\s*(iframe|object|embed|form)\b", re.I), "a frame, object or form (use a data-play button for a build)"),
+]
+
+
+def lint_html(where, text, errors, warnings):
+    if re.search(r"data:[a-z]+/[a-z0-9.+-]+;base64,", str(text), re.I):
+        errors.append(f"{where}: a picture or file pasted in as a data: URI. Publish it as a file beside the page "
+                      f"(Artifact publish `files`) and refer to it by its relative path.")
+    for pattern, what in BAD_HTML:
+        if pattern.search(str(text)):
+            errors.append(f"{where}: {what}; the page strips it, so it won't show.")
+
+
+def lint_item(item, state=None):
+    errors, warnings = [], []
+    ref = item.get("ref") or item.get("id") or "(new)"
+    status = item.get("status", "open")
+    if status not in ("open", "waiting", "done"):
+        errors.append(f"{ref}: status must be open, waiting or done.")
+    if not str(item.get("title", "")).strip():
+        errors.append(f"{ref}: no title.")
+    choices = item.get("choices") or []
+    if status == "open":
+        if not str(item.get("ask", "")).strip():
+            errors.append(f"{ref}: no `ask`. Start with what it asks, in plain words.")
+        else:
+            first = str(item["ask"]).strip().split("\n")[0]
+            if len(first) > 220:
+                warnings.append(f"{ref}: the ask's first line is {len(first)} characters. Lead with the question in one short sentence; put the rest in `context`.")
+        if not isinstance(item.get("priority"), int) or item["priority"] < 1:
+            errors.append(f"{ref}: an open question needs `priority` (1 is first).")
+        if not str(item.get("priorityReason", "")).strip():
+            errors.append(f"{ref}: an open question needs `priorityReason`: one sentence on what waiting costs.")
+    keys = [c.get("key") for c in choices]
+    if len(keys) != len(set(keys)) or any(not k for k in keys):
+        errors.append(f"{ref}: every choice needs a unique `key`.")
+    if any(not str(c.get("label", "")).strip() for c in choices):
+        errors.append(f"{ref}: every choice needs a `label`.")
+    decision = len(choices) >= 2 and item.get("group") != "yours"
+    if decision and status == "open":
+        primaries = sum(1 for c in choices if c.get("primary"))
+        if primaries > 1:
+            errors.append(f"{ref}: {primaries} Recommended choices. Mark one (`primary: true`); a second opinion goes in `secondOpinion`.")
+        elif primaries == 0:
+            warnings.append(f"{ref}: no Recommended choice. Mark the one you'd pick, or say in `pick` why there's none.")
+        for c in choices:
+            if c.get("key") in ("other", "notes") and not c.get("pros") and not c.get("cons"):
+                continue
+            if not c.get("pros") or not c.get("cons"):
+                warnings.append(f"{ref}/{c.get('key')}: argue both sides: `pros` and `cons`, with an example of when it goes wrong.")
+        if not item.get("cost") and not any(c.get("cost") for c in choices):
+            warnings.append(f"{ref}: no `cost` (to build: work and tokens) on the question or its choices.")
+        if not str(item.get("pick", "")).strip():
+            warnings.append(f"{ref}: no `pick`: say which you recommend and why, in one line.")
+    so = item.get("secondOpinion")
+    if so and (not isinstance(so, dict) or so.get("choice") not in keys):
+        errors.append(f"{ref}: `secondOpinion` must be {{choice: <a choice key>, label}}.")
+    if item.get("group") == "yours" and status == "open":
+        if not item.get("steps") and not item.get("prompt"):
+            errors.append(f"{ref}: something only you can do needs `steps` or a `prompt` to paste.")
+        for s in item.get("steps") or []:
+            cmd = str(s.get("command", ""))
+            if re.search(r"(^|\s)(\./|\.\./)", cmd) or re.match(r"\s*(bash|python3?|node)\s+[A-Za-z0-9_-]+/", cmd):
+                warnings.append(f"{ref}: a step's command uses a relative path. Give the whole path from ~, or start with `cd ~/...`.")
+    if item.get("for") and state is not None:
+        known = {"owner"} | set((state.get("config") or {}).get("people", {}).values())
+        if item["for"] not in known:
+            warnings.append(f"{ref}: `for: {item['for']}` matches no one: use \"owner\" or a label given with `config --person`.")
+    for field in ("askedAt",):
+        if field in item:
+            t = parse_time(item[field])
+            if t is None:
+                errors.append(f"{ref}: `{field}` must be UTC ending in Z, as `queue.py` writes it.")
+            elif t > now() + dt.timedelta(minutes=2):
+                errors.append(f"{ref}: `{field}` is in the future, so answers typed now would read as old.")
+    for field in HTML_FIELDS:
+        if field in item:
+            lint_html(f"{ref}.{field}", item[field], errors, warnings)
+    for c in choices:
+        for field in ("label", "cost"):
+            if re.search(r"data:[a-z]+/", str(c.get(field, "")), re.I):
+                errors.append(f"{ref}/{c.get('key')}: a data: URI in `{field}`.")
+    size = len(json.dumps(item, ensure_ascii=False).encode())
+    if size > 240 * 1024:
+        errors.append(f"{ref}: {size // 1024} KB, too close to the store's 256 KiB cap.")
+    elif size > 150 * 1024:
+        warnings.append(f"{ref}: {size // 1024} KB; keep questions small, and pictures in files.")
+    return errors, warnings
+
+
+def lint_feed(entry):
+    errors, warnings = [], []
+    lint_html("feed", entry.get("html", ""), errors, warnings)
+    if parse_time(entry.get("at")) is None:
+        errors.append("feed: `at` must be UTC ending in Z, from the clock, never typed.")
+    elif parse_time(entry["at"]) > now() + dt.timedelta(minutes=2):
+        errors.append("feed: `at` is in the future.")
+    if len(str(entry.get("html", ""))) > 4000:
+        warnings.append("feed: over 4,000 characters. For information is for short status; a question goes in a question.")
+    if re.search(r"\?\s*(<|$)", str(entry.get("html", ""))) and re.search(r"\b(should|shall|do you|would you|which)\b", str(entry.get("html", "")), re.I):
+        warnings.append("feed: it seems to ask something. A question is a queue item with options, never an entry here.")
+    return errors, warnings
+
+
+def report(errors, warnings, checklist=True):
+    for e in errors:
+        print("ERROR  " + e)
+    for w in warnings:
+        print("WARN   " + w)
+    if checklist:
+        print(CHECKLIST)
+    return not errors
+
+
+# ---- commands ------------------------------------------------------------------
+def render(state, force=True):
+    template = TEMPLATE.read_text(encoding="utf-8")
+    if template.count(TOKEN) != 2:
+        die(f"{TEMPLATE} must contain {TOKEN} exactly twice (<title> and <h1>).")
+    out = cache_root() / state["slug"] / "page.html"
+    if out.exists() and not force:
+        die(f"{out} already exists.")
+    out.write_text(template.replace(TOKEN, html.escape(html.unescape(state["title"]))), encoding="utf-8")
+    return out
+
+
+def cmd_init(a):
+    slug = a.slug or slug_of(a.title)
+    folder = cache_root() / slug
+    if (folder / "state.json").exists() and not a.force:
+        die(f"Queue '{slug}' already exists in {folder}. Pass --force to start it again, or --slug for another.")
+    folder.mkdir(parents=True, exist_ok=True)
+    prefix = "Q" if a.prefix is None else a.prefix
+    if not re.fullmatch(r"[A-Za-z]{0,3}", prefix):
+        die("--prefix is up to three letters, e.g. G for G1, G2, ...; \"\" numbers plainly: 1, 2, ...")
+    state = {
+        "slug": slug, "title": a.title, "prefix": prefix, "next": 1,
+        "queueKey": f"{slug[:40]}-{secrets.token_hex(4)}",
+        "url": None, "artifactId": None, "owner": None, "publishedVersions": [],
+        "config": {"template": "owner-queue", "version": 2, "workstream": a.title,
+                   "eyebrow": f"{a.title} · since {now():%Y-%m-%d}", "sound": a.sound or "chime",
+                   "people": {}, "unsafe": {"unattendedWake": False, "collaboratorWake": False}},
+        "configVersion": None,
+    }
+    state["config"]["queueKey"] = state["queueKey"]
+    save_state(state)
+    page = render(state)
+    print(f"Queue '{slug}' started in {folder}.")
+    print(f"1. Publish {page} with the Artifact tool: icon \"checklist\", a one-sentence description, and capabilities:")
+    print(json.dumps(CAPABILITIES))
+    print(f"2. The publish result gives the version id. `Artifact read` the new URL once for the artifact's id (the 8-4-4-4-12 hex in its first line).")
+    print(f"3. ArtifactData `list` collection data/users/me on it: the result names your user id (u_...).")
+    print(f"4. queue.py bind {slug} --url URL --artifact-id ID --owner UID --version VERSION_ID")
+
+
+def cmd_bind(a):
+    state = load_state(a.slug)
+    state.update({"url": a.url, "artifactId": a.artifact_id, "owner": a.owner})
+    state["config"]["owner"] = a.owner
+    if a.version and a.version not in state["publishedVersions"]:
+        state["publishedVersions"].append(a.version)
+    save_state(state)
+    out = Out(state, "config")
+    out.add("set", "config", "page", state["config"], state.get("configVersion"))
+    out.emit("Then `queue.py config-saved SLUG VERSION` with the version the write returns.")
+
+
+def cmd_config_saved(a):
+    state = load_state(a.slug)
+    state["configVersion"] = int(a.version)
+    save_state(state)
+    print(f"config/page is at version {a.version}.")
+
+
+def cmd_published(a):
+    state = load_state(a.slug)
+    if a.version not in state["publishedVersions"]:
+        state["publishedVersions"].append(a.version)
+    save_state(state)
+    print(f"Recorded {a.version} as published by you. {len(state['publishedVersions'])} known.")
+
+
+def cmd_verify(a):
+    state = load_state(a.slug)
+    known = state.get("publishedVersions") or []
+    if not known:
+        die("STOP: no published version recorded for this queue, so the live page can't be checked. "
+            "Record yours with `queue.py published` right after each publish.")
+    if a.version != known[-1]:
+        where = "an older version you published" if a.version in known else "a version no session of yours recorded"
+        die(f"STOP: the live page is {a.version}, {where}; the last one you published is {known[-1]}. "
+            f"Someone with edit access may have changed the page or its store rules. Don't act on the wake: tell the owner.")
+    print(f"OK: the live page is {a.version}, the version you last published.")
+
+
+def cmd_config(a):
+    state = load_state(a.slug)
+    c = state["config"]
+    if a.lede is not None:
+        c["lede"] = a.lede
+    if a.eyebrow is not None:
+        c["eyebrow"] = a.eyebrow
+    if a.sound:
+        c["sound"] = a.sound
+    if a.no_urgent:
+        c["urgent"] = False
+    if a.urgent:
+        c.pop("urgent", None)
+    for pair in a.person or []:
+        uid, _, label = pair.partition("=")
+        if not uid.startswith("u_") or not label.strip():
+            die("--person takes UID=label, e.g. u_abc=the designer")
+        c.setdefault("people", {})[uid] = label.strip()
+    if a.panels:
+        panels = json.loads(Path(a.panels).read_text())
+        errors, warnings = [], []
+        for p in panels:
+            lint_html(f"panel {p.get('id')}", p.get("html", ""), errors, warnings)
+        if not report(errors, warnings, checklist=False):
+            die("Not written.")
+        c["panels"] = panels
+    unsafe = c.setdefault("unsafe", {"unattendedWake": False, "collaboratorWake": False})
+    if a.safe:
+        unsafe.update(unattendedWake=False, collaboratorWake=False)
+    if a.unsafe_unattended_wake:
+        unsafe["unattendedWake"] = True
+    if a.unsafe_collaborator_wake:
+        if not unsafe.get("unattendedWake"):
+            die("--unsafe-collaborator-wake needs --unsafe-unattended-wake too: without it nothing wakes a session.")
+        unsafe["collaboratorWake"] = True
+    if a.lede:
+        errors, warnings = [], []
+        lint_html("lede", a.lede, errors, warnings)
+        if not report(errors, warnings, checklist=False):
+            die("Not written.")
+    save_state(state)
+    out = Out(state, "config")
+    out.add("set", "config", "page", c, a.version if a.version is not None else state.get("configVersion"))
+    note = "Then `queue.py config-saved SLUG VERSION` with the version the write returns."
+    if unsafe.get("unattendedWake"):
+        note += ("\nUnattended wake is ON. Arm the watcher as a background task: python3 "
+                 f"{HERE / 'queue_watch.py'} --key {state['queueKey']} --artifact-id {state.get('artifactId') or 'ID'}")
+    out.emit(note)
+
+
+def next_ref(state):
+    ref = f"{state['prefix']}{state['next']}"
+    state["next"] += 1
+    return ref
+
+
+def cmd_ask(a):
+    state = load_state(a.slug)
+    item = json.loads(Path(a.file).read_text())
+    new = a.version is None
+    if new:
+        if not item.get("ref"):
+            item["ref"] = next_ref(state)
+        else:
+            m = re.fullmatch(rf"{re.escape(state['prefix'])}(\d+)", item["ref"])
+            if m:
+                state["next"] = max(state["next"], int(m.group(1)) + 1)
+        item.setdefault("status", "open")
+    doc_id = item.pop("id", None) or re.sub(r"[^a-z0-9_.-]+", "-", str(item.get("ref") or a.id or "").lower()).strip("-")
+    if not doc_id:
+        die("No id: give the item a `ref` or `id`.")
+    if doc_id == FREE_ID:
+        die(f"'{FREE_ID}' is reserved for the Anything else box.")
+    if new or a.reask:
+        item["askedAt"] = stamp()
+    errors, warnings = lint_item(item, state)
+    if not report(errors, warnings):
+        die("Not written: fix the errors above.")
+    save_state(state)
+    out = Out(state, "ask-" + doc_id)
+    out.add("set" if new else "update", "items", doc_id, item, a.version)
+    out.emit(f"Item {item.get('ref') or doc_id} → items/{doc_id}." + (" Answers given before now show under Previous answers." if a.reask else ""))
+
+
+def cmd_close(a):
+    state = load_state(a.slug)
+    data = {"status": "done", "outcome": a.outcome, "order": int(now().timestamp()),
+            "priority": {"__delete__": True}, "priorityReason": {"__delete__": True}}
+    if a.undo:
+        data["undo"] = a.undo
+    out = Out(state, "close-" + a.id)
+    out.add("update", "items", a.id, data, a.version)
+    out.emit()
+
+
+def cmd_wait(a):
+    state = load_state(a.slug)
+    data = {"status": "waiting", "priority": {"__delete__": True}, "priorityReason": {"__delete__": True}}
+    if a.due:
+        data["due"] = a.due
+    out = Out(state, "wait-" + a.id)
+    out.add("update", "items", a.id, data, a.version)
+    out.emit()
+
+
+def cmd_fyi(a):
+    state = load_state(a.slug)
+    text = Path(a.html[1:]).read_text() if a.html.startswith("@") else a.html
+    t = now()
+    entry = {"at": stamp(t), "html": text}
+    errors, warnings = lint_feed(entry)
+    if not report(errors, warnings, checklist=False):
+        die("Not written.")
+    out = Out(state, "fyi")
+    out.add("set", "feed", "f" + t.strftime("%Y%m%dT%H%M%S%f"), entry)
+    out.emit()
+
+
+def cmd_prune(a):
+    state = load_state(a.slug)
+    cutoff = stamp(now() - dt.timedelta(hours=FEED_HOURS))
+    if not a.ids:
+        print("Find the old entries without reading them: ArtifactData query, collection feed, "
+              f'query {{"where": [["at", "<", "{cutoff}"]], "limit": 200}}, with out_dir (the result lists ids and versions).')
+        print(f"Then: queue.py prune {a.slug} ID=VERSION ID=VERSION ...")
+        return
+    out = Out(state, "prune")
+    for pair in a.ids:
+        doc_id, _, version = pair.partition("=")
+        if not version.isdigit():
+            die(f"{pair}: give ID=VERSION")
+        out.add("delete", "feed", doc_id, None, version)
+    out.emit(f"Deletes {len(a.ids)} entries older than {FEED_HOURS} hours.")
+
+
+def read_dir(root, collection):
+    folder = Path(root) / collection
+    if not folder.is_dir():
+        return {}
+    docs = {}
+    for f in sorted(folder.glob("*.json")):
+        try:
+            body = json.loads(f.read_text())
+        except ValueError:
+            continue
+        docs[f.stem] = body.get("data", body) if isinstance(body, dict) and set(body) >= {"data"} and "id" in body else body
+    return docs
+
+
+def cmd_answers(a):
+    state = load_state(a.slug)
+    root = Path(a.dir)
+    items = read_dir(root, "items")
+    people = read_dir(root, "people")
+    receipts = read_dir(root, "receipts")
+    labels = dict((state.get("config") or {}).get("people", {}))
+    owner = state.get("owner")
+
+    def who(uid):
+        if uid == owner:
+            return "the owner"
+        return labels.get(uid) or f"someone not named in config ({uid})"
+
+    uids = sorted(set(people) | {p.name for p in (root / "people").glob("u_*") if p.is_dir()} | set(labels) | ({owner} if owner else set()))
+    if not items:
+        print(f"No items under {root}/items: list collection `items` with out_dir {root} first.")
+    missing = [u for u in uids if not (root / "people" / u / "answers").is_dir()]
+    if missing:
+        print("Also list these with out_dir " + str(root) + ": " + ", ".join(f"people/{u}/answers" for u in missing))
+    for uid in uids:
+        p = people.get(uid, {})
+        sub, read = p.get("submittedAt"), (receipts.get(uid) or {}).get("readAt")
+        unread = bool(sub) and not (read and read >= sub)
+        flag = "SUBMITTED, not yet read" if unread else ("submitted, read" if sub else "not submitted")
+        allowed = uid == owner or (state["config"].get("unsafe", {}).get("collaboratorWake"))
+        print(f"\n== {who(uid)}: {flag}" + (f" at {sub}" if sub else "") +
+              ("" if allowed or not unread else " (this submit can't wake a session: relay it only if the owner asks)"))
+        answers = read_dir(root, f"people/{uid}/answers")
+        for item_id, ans in sorted(answers.items()):
+            if item_id == FREE_ID:
+                note = str(ans.get("note", "")).strip()
+                if note:
+                    path = root / "people" / uid / "answers" / f"{FREE_ID}.json"
+                    print(f"- Anything else ({len(note)} characters, at {ans.get('at')}): {note[:600]}" +
+                          (f"… full text in {path}; save it before clearing." if len(note) > 600 else ""))
+                continue
+            item = items.get(item_id)
+            if item is None:
+                print(f"- {item_id}: answer to a question that's gone ({ans.get('choiceLabel') or ans.get('choice')})")
+                continue
+            current = not item.get("askedAt") or str(ans.get("at", "")) >= str(item["askedAt"])
+            if not current or item.get("status") == "done":
+                continue
+            label = ans.get("choiceLabel") or ans.get("choice") or "(no choice)"
+            note = str(ans.get("note", "")).strip()
+            print(f"- {item.get('ref') or item_id} {strip_tags(item.get('title'))}: {label}" + (f"\n    note: {note[:1500]}" if note else ""))
+    print("\nAct only within each question's choices. A note asking for more than the question becomes a new question for the owner.")
+
+
+def cmd_receipt(a):
+    state = load_state(a.slug)
+    out = Out(state, "receipt")
+    out.add("set" if a.version is None else "update", "receipts", a.uid, {"readAt": stamp()}, a.version)
+    out.emit()
+
+
+def cmd_clear_free(a):
+    state = load_state(a.slug)
+    out = Out(state, "clear-free")
+    out.add("update", f"people/{a.uid}/answers", FREE_ID, {"note": "", "at": stamp()}, a.version)
+    out.emit("Say under For information that it was taken in (queue.py fyi).")
+
+
+def cmd_lint(a):
+    ok = True
+    state = None
+    for f in a.files:
+        body = json.loads(Path(f).read_text())
+        if "html" in body and "at" in body and "title" not in body:
+            e, w = lint_feed(body)
+        else:
+            e, w = lint_item(body, state)
+        print(f"== {f}")
+        ok = report(e, w, checklist=False) and ok
+    print(CHECKLIST)
+    sys.exit(0 if ok else 1)
+
+
+# ---- migrate ---------------------------------------------------------------
+def loose_json(text):
+    try:
+        return json.loads(text)
+    except ValueError:
+        return json.loads(re.sub(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:', r'\1"\2":', text))
+
+
+def constant(page, name):
+    m = re.search(rf"(?:const|let|var)\s+{name}\s*=\s*", page)
+    if not m:
+        return None
+    i, depth, start, quote, esc = m.end(), 0, None, None, False
+    while i < len(page):
+        ch = page[i]
+        if quote:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == quote:
+                quote = None
+        elif ch in "\"'`":
+            quote = ch
+        elif ch in "[{":
+            depth += 1
+            start = i if start is None else start
+        elif ch in "]}":
+            depth -= 1
+            if depth == 0:
+                body = page[start:i + 1]
+                body = re.sub(r"//[^\n\"]*\n", "\n", body)
+                body = re.sub(r",\s*([\]}])", r"\1", body)
+                return loose_json(body)
+        i += 1
+    return None
+
+
+def pc_split(text):
+    pros = [p.strip(" .") for p in re.findall(r"\+\s*([^+−\-]+?)(?=\s[−-]\s|$)", text)]
+    cons = [p.strip(" .") for p in re.findall(r"[−]\s*(.+?)(?=\s\+\s|$)", text)]
+    return [p + "." for p in pros if p], [c + "." for c in cons if c]
+
+
+def cmd_migrate(a):
+    state = load_state(a.slug)
+    src = Path(a.source).read_text()
+    pc, vr, lede, needs = {}, {}, None, None
+    if src.lstrip().startswith("{"):
+        content = json.loads(src)
+        content = content.get("data", content)
+        sections, fyi, lede, needs = content.get("sections", []), content.get("fyi", []), content.get("lede"), content.get("needs")
+    else:
+        sections = constant(src, "SECTIONS") or []
+        fyi = constant(src, "FYI") or []
+        pc, vr = constant(src, "PC") or {}, constant(src, "VR") or {}
+        m = re.search(r'<p class="lede"[^>]*>(.*?)</p>', src, re.S)
+        lede = m.group(1).strip() if m and "<b>" in m.group(1) else None
+    old_answers = read_dir(a.answers, "answers") if a.answers else {}
+    out = Out(state, "migrate")
+    priority, migrated, untaken = 1, [], []
+    for s in sections:
+        low = "low priority" in str(s.get("title", "")).lower() or s.get("id") == "open"
+        for it in s.get("items", []):
+            item_id = str(it["id"]).lower()
+            tag = str(it.get("tag", ""))
+            head, dot, rest = tag.partition("·")
+            head = head.strip()
+            in_title = re.match(r"([A-Za-z]{1,3}\d+[a-z]?)[.:]\s", strip_tags(it.get("title", "")))
+            if dot and re.fullmatch(r"[A-Za-z]{1,3}\d+[a-z]?", head):
+                ref, topic = head, rest.strip()
+            elif in_title:
+                ref, topic = in_title.group(1), tag.strip()
+            else:
+                m = re.fullmatch(r"q(\d+[a-z]?)", item_id)
+                ref, topic = (state["prefix"] + m.group(1) if m else item_id.upper()), tag.strip()
+            n = re.fullmatch(rf"{re.escape(state['prefix'])}(\d+)[a-z]?", ref)
+            if n:
+                state["next"] = max(state["next"], int(n.group(1)) + 1)
+            question = re.sub(rf"^{re.escape(ref)}[.:]?\s*", "", strip_tags(it.get("title", "")))
+            title = (topic[:1].upper() + topic[1:]) if dot and topic and ref == head else question
+            choices = []
+            for opt in it.get("opts", []):
+                key, label = opt[0], strip_tags(opt[1])
+                c = {"key": key, "label": label}
+                if len(opt) > 2 and opt[2]:
+                    c["primary"] = True
+                if pc.get(it["id"], {}).get(key):
+                    c["pros"], c["cons"] = pc_split(pc[it["id"]][key])
+                choices.append(c)
+            history = [{"who": "", "choiceLabel": p.get("choice", ""), "note": p.get("note", ""), "at": p.get("at", "")} for p in it.get("prev", [])]
+            old = old_answers.get(it["id"]) or old_answers.get(item_id)
+            if old and (old.get("choice") or str(old.get("note", "")).strip()):
+                untaken.append(f"{ref} ({old.get('at', '')[:16].replace('T', ' ')})")
+                label = next((c["label"] for c in choices if c["key"] == old.get("choice")), old.get("choice") or "")
+                who = "the owner" if not old.get("by") or old.get("by") == state.get("owner") else state["config"].get("people", {}).get(old["by"], "")
+                history.append({"who": who, "choiceLabel": label, "note": old.get("note", ""), "at": old.get("at", "")})
+            item = {"ref": ref, "title": title or question or ref, "status": "open",
+                    "ask": question or title or ref,
+                    "context": it.get("ctx", ""), "choices": choices, "askedAt": stamp(),
+                    "priority": priority, "priorityReason": f"Carried over from the 1.x page, where it sat under \"{s.get('title', '')}\". Re-rank it.",
+                    "source": f"Migrated from the 1.x queue{(': ' + topic) if topic else ''}"}
+            if s.get("intro"):
+                item["context"] = s["intro"] + item["context"]
+            if low:
+                item["lowPriority"] = True
+            if vr.get(it["id"]) in [c["key"] for c in choices]:
+                item["secondOpinion"] = {"choice": vr[it["id"]], "label": "Values review"}
+            if history:
+                item["history"] = history
+            if it.get("for"):
+                item["for"] = it["for"]
+            priority += 1
+            out.add("set", "items", item_id, item)
+            migrated.append(ref)
+    cutoff = now() - dt.timedelta(hours=FEED_HOURS)
+    kept = 0
+    for f in fyi:
+        t = parse_time(str(f.get("at", "")).replace("+00:00", "Z")) or parse_time(str(f.get("at", "")))
+        if t and t >= cutoff:
+            out.add("set", "feed", "f" + t.strftime("%Y%m%dT%H%M%S%f") + f"-{kept}", {"at": stamp(t), "html": f.get("html", "")})
+            kept += 1
+    errors, warnings = [], []
+    for w in out.writes:
+        if w["collection"] == "items":
+            e, wn = lint_item(json.loads(Path(w["file_path"]).read_text()), state)
+            errors += e
+            warnings += [x for x in wn if "pick" not in x and "cost" not in x]
+    report(errors, warnings, checklist=False)
+    save_state(state)
+    notes = [f"{len(migrated)} questions ({', '.join(migrated) or 'none'}) and {kept} For information entries from the last {FEED_HOURS} hours."]
+    if lede:
+        notes.append("The old status line, for `queue.py config --lede`: " + strip_tags(lede)[:300])
+    if needs:
+        p = cache_root() / state["slug"] / "migrated-needs-panel.json"
+        p.write_text(json.dumps([{"id": "needs", "title": "Needs you, in person", "html": needs}], ensure_ascii=False, indent=1))
+        notes.append(f"The old \"Needs you, in person\" text is a panel in {p}: `queue.py config --panels {p}`.")
+    if untaken:
+        notes.append("WARNING: these open questions have answers in the old store, probably not taken in yet: "
+                     + ", ".join(untaken) + ". Act on them (or confirm they're stale) before switching; after it, "
+                     "they show only as Previous answers.")
+    free = old_answers.get("free")
+    if free and str(free.get("note", "")).strip():
+        notes.append("WARNING: the old \"Anything else\" still holds a note. Take it in (and save it) before switching.")
+    notes.append("Old answers stay in the store's `answers` collection; open questions carry them under Previous answers.")
+    out.emit("\n".join(notes))
+
+
+def cmd_status(a):
+    if not a.slug:
+        root = cache_root()
+        for f in sorted(root.glob("*/state.json")) if root.exists() else []:
+            s = json.loads(f.read_text())
+            print(f"{s['slug']}: {s['title']}  {s.get('url') or '(not published)'}")
+        return
+    s = load_state(a.slug)
+    u = s["config"].get("unsafe", {})
+    print(json.dumps({"title": s["title"], "url": s.get("url"), "artifactId": s.get("artifactId"), "queueKey": s["queueKey"],
+                      "owner": s.get("owner"), "nextRef": f"{s['prefix']}{s['next']}", "people": s["config"].get("people", {}),
+                      "unattendedWake": bool(u.get("unattendedWake")), "collaboratorWake": bool(u.get("collaboratorWake")),
+                      "lastPublished": (s.get("publishedVersions") or [None])[-1], "configVersion": s.get("configVersion")}, indent=1))
+
+
+def cmd_capabilities(a):
+    print(json.dumps(CAPABILITIES))
+
+
+def cmd_render(a):
+    state = load_state(a.slug)
+    print(render(state))
+    print("Republish it with `url` set to the queue's URL and the capabilities from `queue.py capabilities`, "
+          "then record the new version with `queue.py published`.")
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Owner Queue 2.0 session tool")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("init"); p.add_argument("title"); p.add_argument("--slug"); p.add_argument("--prefix")
+    p.add_argument("--sound", choices=SOUNDS); p.add_argument("--force", action="store_true"); p.set_defaults(fn=cmd_init)
+    p = sub.add_parser("bind"); p.add_argument("slug"); p.add_argument("--url", required=True); p.add_argument("--artifact-id", required=True)
+    p.add_argument("--owner", required=True); p.add_argument("--version"); p.set_defaults(fn=cmd_bind)
+    p = sub.add_parser("config-saved"); p.add_argument("slug"); p.add_argument("version"); p.set_defaults(fn=cmd_config_saved)
+    p = sub.add_parser("published"); p.add_argument("slug"); p.add_argument("version"); p.set_defaults(fn=cmd_published)
+    p = sub.add_parser("verify"); p.add_argument("slug"); p.add_argument("version"); p.set_defaults(fn=cmd_verify)
+    p = sub.add_parser("config"); p.add_argument("slug"); p.add_argument("--lede"); p.add_argument("--eyebrow")
+    p.add_argument("--sound", choices=SOUNDS); p.add_argument("--person", action="append"); p.add_argument("--panels")
+    p.add_argument("--no-urgent", action="store_true"); p.add_argument("--urgent", action="store_true")
+    p.add_argument("--unsafe-unattended-wake", action="store_true"); p.add_argument("--unsafe-collaborator-wake", action="store_true")
+    p.add_argument("--safe", action="store_true"); p.add_argument("--version", type=int); p.set_defaults(fn=cmd_config)
+    p = sub.add_parser("ask"); p.add_argument("slug"); p.add_argument("file"); p.add_argument("--version", type=int)
+    p.add_argument("--reask", action="store_true"); p.add_argument("--id"); p.set_defaults(fn=cmd_ask)
+    p = sub.add_parser("close"); p.add_argument("slug"); p.add_argument("id"); p.add_argument("--outcome", required=True)
+    p.add_argument("--undo"); p.add_argument("--version", type=int, required=True); p.set_defaults(fn=cmd_close)
+    p = sub.add_parser("wait"); p.add_argument("slug"); p.add_argument("id"); p.add_argument("--due")
+    p.add_argument("--version", type=int, required=True); p.set_defaults(fn=cmd_wait)
+    p = sub.add_parser("fyi"); p.add_argument("slug"); p.add_argument("html"); p.set_defaults(fn=cmd_fyi)
+    p = sub.add_parser("prune"); p.add_argument("slug"); p.add_argument("ids", nargs="*"); p.set_defaults(fn=cmd_prune)
+    p = sub.add_parser("answers"); p.add_argument("slug"); p.add_argument("dir"); p.set_defaults(fn=cmd_answers)
+    p = sub.add_parser("receipt"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int); p.set_defaults(fn=cmd_receipt)
+    p = sub.add_parser("clear-free"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int, required=True); p.set_defaults(fn=cmd_clear_free)
+    p = sub.add_parser("lint"); p.add_argument("files", nargs="+"); p.set_defaults(fn=cmd_lint)
+    p = sub.add_parser("migrate"); p.add_argument("slug"); p.add_argument("source"); p.add_argument("--answers"); p.set_defaults(fn=cmd_migrate)
+    p = sub.add_parser("status"); p.add_argument("slug", nargs="?"); p.set_defaults(fn=cmd_status)
+    p = sub.add_parser("capabilities"); p.set_defaults(fn=cmd_capabilities)
+    p = sub.add_parser("render"); p.add_argument("slug"); p.set_defaults(fn=cmd_render)
+    a = ap.parse_args()
+    a.fn(a)
+
+
+if __name__ == "__main__":
+    main()

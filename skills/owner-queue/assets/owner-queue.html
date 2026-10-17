@@ -1,901 +1,868 @@
 <title>__QUEUE_TITLE__</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
+/* Layout: one reading column; a sticky bar for progress and Submit; questions as cards, most important first. Owner Queue 2.0. */
 :root {
-  --bg: #F2F5F3;
-  --surface: #FFFFFF;
-  --ink: #17201B;
-  --muted: #55635B;
-  --rule: #D5DED9;
-  --accent: #1C6A46;
-  --accent-ink: #FFFFFF;
-  --accent-soft: #E0EEE6;
-  --warn: #A1470B;
-  --warn-soft: #F7E8DA;
-  --quiet: #7B8881;
-  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
-  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --bg: #f6f7f4; --surface: #ffffff; --ink: #1d2320; --muted: #5d6762; --line: #d9ddd7;
+  --accent: #2f6b4f; --accent-ink: #ffffff; --accent-soft: #e3efe8;
+  --rec: #8a5a12; --rec-soft: #f6ecd9; --warn: #a1470b; --warn-soft: #f7e8da; --quiet: #7b8881;
+  --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0F1412;
-    --surface: #161D1A;
-    --ink: #E3EAE6;
-    --muted: #9AA9A1;
-    --rule: #29342F;
-    --accent: #5BC38E;
-    --accent-ink: #0B1912;
-    --accent-soft: #1A3127;
-    --warn: #EE9F5E;
-    --warn-soft: #382416;
-    --quiet: #6E7C75;
-    color-scheme: dark;
-  }
-}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #141816; --surface: #1b201d; --ink: #e4e9e5; --muted: #9aa59f; --line: #2e3631;
+  --accent: #7cc39c; --accent-ink: #0b1912; --accent-soft: #1f3128;
+  --rec: #e3b768; --rec-soft: #33291a; --warn: #ee9f5e; --warn-soft: #382416; --quiet: #6e7c75; color-scheme: dark } }
 :root[data-theme="dark"] {
-  --bg: #0F1412;
-  --surface: #161D1A;
-  --ink: #E3EAE6;
-  --muted: #9AA9A1;
-  --rule: #29342F;
-  --accent: #5BC38E;
-  --accent-ink: #0B1912;
-  --accent-soft: #1A3127;
-  --warn: #EE9F5E;
-  --warn-soft: #382416;
-  --quiet: #6E7C75;
-  color-scheme: dark;
-}
-
-[hidden] { display: none !important; }
-body {
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--font-body);
-  font-size: 0.95rem;
-  line-height: 1.55;
-}
-.page {
-  max-width: 50rem;
-  margin: 0 auto;
-  padding-inline: 1rem;
-  padding-block: 2.25rem 4rem;
-  display: grid;
-  gap: 2.5rem;
-}
+  --bg: #141816; --surface: #1b201d; --ink: #e4e9e5; --muted: #9aa59f; --line: #2e3631;
+  --accent: #7cc39c; --accent-ink: #0b1912; --accent-soft: #1f3128;
+  --rec: #e3b768; --rec-soft: #33291a; --warn: #ee9f5e; --warn-soft: #382416; --quiet: #6e7c75; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--font-body); }
+.wrap { max-width: 54rem; margin: 0 auto; padding-inline: 16px; padding-block: 24px 72px; display: grid; gap: 1.6rem; }
+.wrap > * { min-width: 0; }
+.queue { display: grid; gap: 1.6rem; min-width: 0; }
 a { color: var(--accent); }
-a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-code {
-  font-family: var(--font-mono);
-  font-size: 0.86em;
-  overflow-wrap: anywhere;
-}
+code, kbd, pre { font-family: var(--font-mono); font-size: .86em; overflow-wrap: anywhere; }
+pre { white-space: pre-wrap; margin: .4rem 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1 { font-size: clamp(1.6rem, 5vw, 2.1rem); line-height: 1.15; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+h2 { font-size: 1.15rem; margin: 0; text-wrap: balance; }
+h3 { font-size: 1.02rem; line-height: 1.3; margin: 0; text-wrap: balance; }
+p { margin: 0; }
 
-.masthead { display: grid; gap: 0.9rem; }
-.eyebrow {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 0;
-}
-h1 {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: clamp(2rem, 6vw, 2.75rem);
-  line-height: 1.05;
-  margin: 0;
-  text-wrap: balance;
-}
-.tally {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.4rem 1rem;
-  margin: 0;
-}
-.tally strong {
-  font-family: var(--font-display);
-  font-size: 1.6rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.tally span { color: var(--muted); }
-.lede { margin: 0; max-width: 62ch; color: var(--muted); }
-.status {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--muted);
-  min-height: 1.3em;
-}
+.masthead { display: grid; gap: .5rem; }
+.eyebrow { font-family: var(--font-mono); font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.tally { display: flex; flex-wrap: wrap; gap: .3rem .9rem; align-items: baseline; }
+.tally strong { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.tally span, .lede { color: var(--muted); }
+.lede { max-width: 65ch; }
+.lede p + p { margin-top: .35rem; }
+.unsafe { background: var(--warn-soft); color: var(--warn); border-left: 4px solid var(--warn); border-radius: 6px; padding: .45rem .7rem; font-size: .88rem; }
+.status { font-family: var(--font-mono); font-size: .78rem; color: var(--muted); min-height: 1.2em; }
 .status.is-error { color: var(--warn); }
 
-.group { display: grid; gap: 0.75rem; }
-.group-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-  border-bottom: 2px solid var(--ink);
-  padding-bottom: 0.4rem;
-}
-h2 {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 1.3rem;
-  margin: 0;
-  text-wrap: balance;
-}
-h2 .count { font-family: var(--font-mono); font-weight: 400; font-size: 0.95rem; color: var(--muted); margin-left: 0.4rem; }
-.blurb { margin: 0; color: var(--muted); max-width: 62ch; }
-.items { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding-block: .55rem; display: flex; flex-wrap: wrap; gap: .5rem .9rem; align-items: center; }
+.progress { flex: 1 1 200px; min-width: 0; }
+.track { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.fill { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+.plabel { font-size: .8rem; color: var(--muted); margin-top: .2rem; font-variant-numeric: tabular-nums; }
+.submit-line { flex-basis: 100%; font-size: .84rem; color: var(--muted); display: grid; gap: .15rem; }
+.submit-line:empty { display: none; }
 
-.item {
-  display: grid;
-  grid-template-columns: 4.25rem minmax(0, 1fr);
-  gap: 0 1rem;
-  padding-block: 1.1rem;
-  border-bottom: 1px solid var(--rule);
-}
-.ref {
-  font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 0.85rem;
-  color: var(--accent);
-  padding-top: 0.2rem;
-  overflow-wrap: anywhere;
-}
-.body { display: grid; gap: 0.55rem; min-width: 0; overflow-wrap: anywhere; }
-.title-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem 0.75rem; }
-h3 {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 1.12rem;
-  line-height: 1.25;
-  margin: 0;
-  text-wrap: balance;
-}
-.chip {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.03em;
-  padding: 0.1rem 0.5rem;
-  border-radius: 999px;
-  white-space: nowrap;
-}
+button { font: inherit; font-size: .88rem; cursor: pointer; border-radius: 6px; padding: .38rem .75rem; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { cursor: default; opacity: .55; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+button[aria-pressed="true"].toggle { border-color: var(--accent); background: var(--accent-soft); }
+button.link { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; font-size: .84rem; }
+
+.section { display: grid; gap: .7rem; }
+.section-head { display: flex; flex-wrap: wrap; gap: .3rem .8rem; align-items: baseline; justify-content: space-between; border-bottom: 2px solid var(--ink); padding-bottom: .3rem; }
+.section-head .count { font-family: var(--font-mono); font-size: .85rem; color: var(--muted); font-weight: 400; margin-left: .35rem; }
+.blurb { color: var(--muted); font-size: .9rem; max-width: 65ch; }
+.list { display: grid; gap: .75rem; }
+
+.item { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: .9rem 1rem; display: grid; gap: .6rem; min-width: 0; }
+.item.is-answered { border-left: 4px solid var(--accent); }
+.item-head { display: flex; flex-wrap: wrap; gap: .25rem .6rem; align-items: baseline; }
+.ref { font-family: var(--font-mono); font-size: .8rem; color: var(--accent); font-weight: 600; }
+.item-head h3 { flex: 1 1 16rem; min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+.chip { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .03em; padding: .08rem .45rem; border-radius: 999px; white-space: nowrap; background: var(--accent-soft); color: var(--accent); }
 .chip.due { background: var(--warn-soft); color: var(--warn); }
-.chip.waiting { background: var(--accent-soft); color: var(--muted); }
-.chip.kind { background: var(--accent-soft); color: var(--accent); }
-.ask { margin: 0; max-width: 65ch; white-space: pre-line; }
-.priority { margin: 0; max-width: 65ch; font-size: 0.9rem; color: var(--muted); }
+.chip.for { background: var(--rec-soft); color: var(--rec); }
+.chip.low { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+.priority { font-size: .86rem; color: var(--muted); }
+.label { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: .4rem; }
 .priority .label { color: var(--accent); }
-.pick { margin: 0; max-width: 65ch; }
-.label {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-right: 0.4rem;
-}
-.pick.none { color: var(--muted); font-style: italic; }
-.sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 0.6rem 1.25rem; max-width: 65ch; }
-.side { min-width: 0; }
-.side h4 { margin: 0 0 0.2rem; font-size: 0.9rem; font-weight: 600; }
-.case { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.15rem; font-size: 0.9rem; }
+.ask { white-space: pre-line; max-width: 68ch; font-weight: 500; }
+.context { max-width: 70ch; min-width: 0; overflow-wrap: anywhere; display: grid; gap: .4rem; }
+.context > * { margin: 0; }
+.context ul, .context ol { padding-left: 1.2rem; display: grid; gap: .2rem; }
+.context img, .context svg { max-width: 100%; height: auto; }
+.context table { border-collapse: collapse; font-size: .88rem; }
+.context .table-scroll { overflow-x: auto; }
+.context th, .context td { text-align: left; padding: .25rem .6rem .25rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+
+.opts { display: grid; gap: .4rem; }
+.opt { display: grid; gap: .25rem; text-align: left; width: 100%; padding: .55rem .7rem; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); }
+.opt[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.opt-label { font-weight: 600; }
+.badge { display: inline-block; font-size: .66rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border-radius: 4px; padding: 0 .35rem; margin-left: .4rem; vertical-align: .1rem; color: var(--rec); background: var(--rec-soft); }
+.badge.second { color: var(--accent); background: var(--accent-soft); }
+.case { margin: 0; padding-left: 1.1rem; display: grid; gap: .1rem; font-size: .88rem; font-weight: 400; }
 .case .pro::marker { content: "+  "; color: var(--accent); font-family: var(--font-mono); }
 .case .con::marker { content: "−  "; color: var(--warn); font-family: var(--font-mono); }
-.meta {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 0.15rem 0.75rem;
-  margin: 0;
-  font-size: 0.86rem;
-  color: var(--muted);
-}
-.meta dt { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; padding-top: 0.15rem; }
+.opt-cost { font-size: .84rem; color: var(--muted); font-weight: 400; }
+.pick { max-width: 68ch; }
+.meta { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .15rem .7rem; font-size: .86rem; color: var(--muted); margin: 0; }
+.meta dt { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; padding-top: .15rem; }
 .meta dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.context { margin: 0; font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); overflow-wrap: anywhere; }
+.steps { margin: 0; padding-left: 1.4rem; display: grid; gap: .6rem; max-width: 68ch; }
+.steps li::marker { font-family: var(--font-mono); font-size: .8rem; color: var(--accent); }
+.command { margin-top: .3rem; display: flex; gap: .5rem; align-items: flex-start; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: .4rem .5rem .4rem .7rem; }
+.command pre { margin: 0; flex: 1 1 auto; min-width: 0; font-size: .8rem; }
+.command button { flex: none; font-size: .76rem; padding: .2rem .55rem; }
+.box-label { font-size: .8rem; color: var(--muted); display: flex; justify-content: space-between; gap: .5rem; flex-wrap: wrap; align-items: baseline; }
+textarea { width: 100%; min-height: 2.8rem; resize: vertical; font: inherit; font-size: .92rem; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: .45rem .6rem; field-sizing: content; max-height: 24rem; }
+textarea.has-text { border-color: var(--accent); }
+.saved { font-size: .76rem; color: var(--muted); }
+.saved:empty { display: none; }
+.others, .history { display: grid; gap: .2rem; font-size: .86rem; }
+.answer-line { display: flex; flex-wrap: wrap; gap: .15rem .6rem; align-items: baseline; }
+.answer-line .who { font-weight: 600; }
+.answer-line .said { white-space: pre-wrap; overflow-wrap: anywhere; }
+.stamp { font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.source { font-family: var(--font-mono); font-size: .76rem; color: var(--muted); overflow-wrap: anywhere; }
+.item.is-answered .ask, .item.is-answered .context, .item.is-answered .opt-cost, .item.is-answered .case { color: var(--quiet); }
 
-.steps { margin: 0; padding-left: 1.4rem; display: grid; gap: 0.7rem; max-width: 65ch; }
-.steps li { padding-left: 0.2rem; }
-.steps li::marker { font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent); }
-.steps p { margin: 0; }
-.command {
-  margin-top: 0.35rem;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  background: var(--bg);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 0.45rem 0.5rem 0.45rem 0.7rem;
-}
-.command pre {
-  margin: 0;
-  flex: 1 1 auto;
-  min-width: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  line-height: 1.5;
-}
-.command code { font-size: inherit; }
-.command button { flex: none; font-size: 0.78rem; padding: 0.2rem 0.6rem; }
-
-.actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-button {
-  font: inherit;
-  font-size: 0.88rem;
-  cursor: pointer;
-  border-radius: 6px;
-  padding: 0.35rem 0.8rem;
-  border: 1px solid var(--rule);
-  background: var(--surface);
-  color: var(--ink);
-}
-button:hover:not(:disabled) { border-color: var(--accent); }
-button .tag {
-  margin-left: 0.45rem;
-  font-family: var(--font-mono);
-  font-size: 0.66rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-button.is-chosen { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-button.is-chosen .tag { color: inherit; }
-button:disabled { cursor: default; opacity: 0.55; }
-button.link {
-  border: 0;
-  background: none;
-  padding: 0;
-  color: var(--accent);
-  text-decoration: underline;
-  font-size: 0.85rem;
-}
-.note { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
-.note label { font-size: 0.82rem; color: var(--muted); flex-basis: 100%; }
-.note input {
-  font: inherit;
-  font-size: 0.9rem;
-  flex: 1 1 14rem;
-  min-width: 0;
-  padding: 0.35rem 0.6rem;
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--ink);
-}
-.note input.has-text { border-color: var(--accent); }
-.earlier-answers { display: grid; gap: 0.25rem; }
-.answer-line {
-  margin: 0;
-  font-size: 0.86rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.75rem;
-  align-items: baseline;
-}
-
-.item.is-answered .ask, .item.is-answered .sides, .item.is-answered .pick, .item.is-answered .meta { color: var(--quiet); }
-.item.is-answered h3 { color: var(--muted); }
-
-.done { border-top: 1px solid var(--rule); padding-top: 1rem; }
-.done summary { cursor: pointer; font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; }
-.done .item { opacity: 0.8; }
-
-.placeholder {
-  border: 1px dashed var(--rule);
-  border-radius: 8px;
-  padding: 1.5rem 1.25rem;
-  color: var(--muted);
-  display: grid;
-  gap: 0.4rem;
-}
-.placeholder strong { color: var(--ink); font-family: var(--font-display); font-size: 1.1rem; font-weight: 600; }
-
-.footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 1rem; display: grid; gap: 0.4rem; }
-.footer p { margin: 0; max-width: 65ch; }
-
-@media (max-width: 34rem) {
-  .item { grid-template-columns: minmax(0, 1fr); gap: 0.35rem; }
-  .ref { padding-top: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  * { scroll-behavior: auto !important; transition: none !important; }
-}
+.panel, .feed { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: .9rem 1rem; display: grid; gap: .5rem; min-width: 0; }
+.feed ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .55rem; }
+.feed li { overflow-wrap: anywhere; }
+.play-frame iframe { width: 100%; aspect-ratio: 16 / 9; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background: #0b1220; display: block; }
+details.done > summary { cursor: pointer; font-weight: 600; font-size: 1.05rem; }
+details.done .list { margin-top: .7rem; }
+details.done .item { opacity: .85; }
+.placeholder { border: 1px dashed var(--line); border-radius: 8px; padding: 1.3rem 1.1rem; color: var(--muted); display: grid; gap: .3rem; }
+.placeholder strong { color: var(--ink); }
+.footer { font-size: .84rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: .8rem; display: grid; gap: .35rem; }
+#copyOut { width: 100%; min-height: 12rem; font-family: var(--font-mono); font-size: .8rem; }
+@media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
 </style>
 
-<div class="page">
+<div class="wrap">
   <header class="masthead">
     <p class="eyebrow" id="eyebrow" hidden></p>
     <h1>__QUEUE_TITLE__</h1>
     <p class="tally" id="tally"><strong>Needs you: …</strong><span>Loading the queue.</span></p>
-    <p class="lede" id="lede">Everything in this workstream that needs you is here: decisions, steps only you can take, and results to review. Entries run most important first, and each says why it ranks where it does. Click an answer and add a note if it needs one, then tell a Claude session on this queue.</p>
-    <p class="status" id="status"></p>
+    <div class="lede" id="lede"><p>Everything in this workstream that needs you is here: decisions, steps only you can take, and results to review, most important first. Pick an answer and add a note if it needs one. Your answers save as you go.</p></div>
+    <p class="unsafe" id="unsafe" hidden></p>
+    <p class="status" id="status" role="status"></p>
   </header>
 
-  <main id="queue">
-    <div class="placeholder" id="placeholder">
-      <strong>Loading the queue</strong>
-      <span>Entries come from this page's data store, most important first.</span>
-    </div>
+  <div class="bar" id="bar">
+    <div class="progress"><div class="track"><div class="fill" id="fill"></div></div><div class="plabel" id="plabel">0 of 0 answered</div></div>
+    <button type="button" class="primary" id="submitBtn" disabled>Submit answers</button>
+    <button type="button" class="toggle" id="pingBtn" aria-pressed="false">Ping me on updates</button>
+    <button type="button" id="copyBtn">Copy all answers</button>
+    <div class="submit-line" id="submitLine" aria-live="polite"></div>
+  </div>
+
+  <main id="queue" class="queue">
+    <div class="placeholder" id="placeholder"><strong>Loading the queue</strong><span>Questions come from this page's data store, most important first.</span></div>
   </main>
 
+  <section class="section" id="free-section" aria-labelledby="free-h" hidden>
+    <div class="section-head"><h2 id="free-h">Anything else</h2></div>
+    <p class="blurb">Corrections, priorities, reports, links: anything that isn't an answer to a question above. It's cleared once taken in, and that's said under For information.</p>
+    <div class="item">
+      <textarea id="note-anything-else" rows="4" aria-labelledby="free-h"></textarea>
+      <div class="saved" id="saved-anything-else"></div>
+      <div class="others" id="others-anything-else" hidden></div>
+    </div>
+  </section>
+
+  <section class="section" id="feed-section" aria-labelledby="feed-h" hidden>
+    <div class="section-head"><h2 id="feed-h">For information</h2></div>
+    <p class="blurb">Newest first, in your time. Anything older than 48 hours drops off.</p>
+    <div class="feed"><ul id="feed-list"></ul><p id="feed-empty" class="blurb" hidden>Nothing new in the last 48 hours.</p></div>
+  </section>
+
+  <section class="section" id="done-section" hidden>
+    <details class="done" id="done"><summary id="done-summary">Done</summary><div class="list" id="done-list"></div></details>
+  </section>
+
   <footer class="footer" id="footer">
-    <p>Each entry's Source line names the file or report with the full evidence. Where a file and this queue differ, the queue is newer.</p>
+    <p>Each question's Source line names the file or report with the full evidence. Where a file and this queue differ, the queue is newer.</p>
   </footer>
+  <textarea id="copyOut" hidden readonly aria-label="All answers as text"></textarea>
 </div>
 
 <script>
-const DEFAULT_KINDS = {
-  go: "Go-ahead",
-  domain: "Your call",
-  yours: "Only you can do this",
-  review: "Review",
-  house: "Housekeeping",
-};
-const DEFAULT_TEXT = {
-  savedText: "Saved. Tell a Claude session on this queue when you're done.",
-  pendingText: "answered, waiting for Claude",
-  bulkLabel: "Accept all my picks",
-};
-const SECTIONS = [
-  { key: "open", label: "Your queue", blurb: "Most important first." },
-  { key: "waiting", label: "Scheduled", blurb: "Not on you. Listed so you know what runs next." },
-];
+"use strict";
+const DEFAULT_KINDS = { go: "Go-ahead", domain: "Your call", yours: "Only you can do this", review: "Review", house: "Housekeeping" };
+const FREE_ID = "anything-else";
+const FEED_HOURS = 48;
 
-const items = new Map();
-const answers = new Map();
-const itemViews = new Map();
-const sectionViews = new Map();
-const writeChains = new Map();
+let db = null, userApi = null, me = null, isOwner = false, readOnly = false;
 let config = {};
-let database = null;
-let itemsLoaded = false;
-let readOnly = false;
+const items = new Map(), feed = new Map(), people = new Map(), receipts = new Map();
+const answers = new Map();          // uid -> Map(itemId -> answer)
+const answerSubs = new Map();       // uid -> unsubscribe
+const views = new Map();            // itemId -> view
+const pending = new Map();          // itemId -> timer, for my unsaved notes
+const drafts = new Map();           // itemId -> draft not yet confirmed by the store
+const saving = new Set();           // itemIds with a save under way
+let names = {};                     // uid -> display label
+let loaded = { items: false, config: false, feed: false };
+let firstContent = true, pingOn = false, audio = null;
 
-const queueElement = document.getElementById("queue");
-const statusElement = document.getElementById("status");
-const eyebrowElement = document.getElementById("eyebrow");
-const ledeElement = document.getElementById("lede");
-const footerElement = document.getElementById("footer");
-const defaultLede = ledeElement.textContent;
-const defaultFooter = [...footerElement.childNodes].map((node) => node.cloneNode(true));
+const $ = (id) => document.getElementById(id);
+function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined && text !== null) n.textContent = String(text); return n; }
+function isObj(v) { return Boolean(v) && typeof v === "object" && !Array.isArray(v); }
+function arr(v) { return Array.isArray(v) ? v : []; }
+function nowIso() { return new Date().toISOString(); }
+function setStatus(text, error) { $("status").textContent = text || ""; $("status").classList.toggle("is-error", Boolean(error)); }
+const fmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+function when(iso) { const t = Date.parse(iso); return Number.isFinite(t) ? fmt.format(new Date(t)) : ""; }
+function store(key, value) { try { if (value === undefined) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(value)); } catch (e) {} }
+function load(key) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
 
-function setStatus(text, isError) {
-  statusElement.textContent = text;
-  statusElement.classList.toggle("is-error", Boolean(isError));
-}
-
-function element(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
+// Plain text with `backticks` as code. Everything a person writes goes through here, never through innerHTML.
 function withCode(target, text) {
-  const value = String(text);
-  const parts = value.split("`");
-  if (parts.length % 2 === 0) {
-    target.append(document.createTextNode(value));
-    return target;
-  }
-  parts.forEach((part, index) => {
-    if (part) target.append(index % 2 === 1 ? element("code", "", part) : document.createTextNode(part));
-  });
+  const value = String(text ?? ""), parts = value.split("`");
+  if (parts.length % 2 === 0) { target.append(document.createTextNode(value)); return target; }
+  parts.forEach((part, i) => { if (part) target.append(i % 2 ? el("code", "", part) : document.createTextNode(part)); });
   return target;
 }
 
-function isPlainObject(value) { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
-function kindLabels() { return { ...DEFAULT_KINDS, ...(isPlainObject(config.kinds) ? config.kinds : {}) }; }
-function configText(key) { return typeof config[key] === "string" && config[key] ? config[key] : DEFAULT_TEXT[key]; }
-function bulkSetting() { return isPlainObject(config.bulk) && config.bulk.kind ? config.bulk : null; }
+// Claude's HTML (question context, the status line, For information, panels) passes an allowlist: no scripts,
+// no event handlers, no frames, no forms, links and pictures only from safe addresses.
+const TAGS = new Set("a abbr b blockquote br caption code dd del div dl dt em figcaption figure h3 h4 h5 hr i img kbd li mark ol p pre q s small span strong sub sup table tbody td tfoot th thead tr u ul button svg g defs title desc polygon polyline line rect circle ellipse path text tspan marker".split(" "));
+const DROP = new Set("script style iframe frame frameset object embed form input textarea select option template link meta base noscript foreignobject animate set audio video source track canvas dialog".split(" "));
+const ATTRS = new Set("href title alt src width height colspan rowspan scope start class role aria-label aria-hidden lang dir viewbox xmlns fill stroke stroke-width stroke-linejoin stroke-linecap stroke-dasharray opacity fill-opacity stroke-opacity points x y x1 y1 x2 y2 cx cy r rx ry d transform font-size font-weight text-anchor dominant-baseline marker-end marker-start refx refy markerwidth markerheight orient preserveaspectratio style type data-save data-save-zip data-files data-play".split(" "));
+function safeUrl(value, forImage) {
+  const v = String(value || "").trim();
+  if (!v) return null;
+  if (/^(https?:|mailto:)/i.test(v)) return forImage && !/^https:/i.test(v) ? null : v;
+  if (forImage && /^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=\s]+$/i.test(v)) return v;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(v)) return null;           // javascript:, data: and every other scheme
+  if (v.startsWith("//")) return null;
+  return v;                                                  // relative: files published beside the page, #anchors, /_blob/
+}
+function cleanNode(node) {
+  for (const child of [...node.childNodes]) {
+    if (child.nodeType === 3) continue;
+    if (child.nodeType !== 1) { child.remove(); continue; }
+    const tag = child.localName.toLowerCase();
+    if (DROP.has(tag)) { child.remove(); continue; }
+    if (!TAGS.has(tag)) { cleanNode(child); child.replaceWith(...child.childNodes); continue; }
+    for (const attr of [...child.attributes]) {
+      const name = attr.name.toLowerCase();
+      if (!ATTRS.has(name) || name.startsWith("on")) { child.removeAttribute(attr.name); continue; }
+      if (name === "href") { const u = safeUrl(attr.value, false); if (u === null) child.removeAttribute(attr.name); else child.setAttribute("href", u); }
+      if (name === "src") { const u = safeUrl(attr.value, true); if (u === null) child.removeAttribute(attr.name); }
+      if (name === "style" && /url\s*\(|expression\s*\(|@import/i.test(attr.value)) child.removeAttribute(attr.name);
+      if (name === "type" && tag === "button") child.setAttribute("type", "button");
+    }
+    if (tag === "a" && child.getAttribute("href")) { child.setAttribute("target", "_blank"); child.setAttribute("rel", "noopener noreferrer"); }
+    if (tag === "button") child.setAttribute("type", "button");
+    cleanNode(child);
+  }
+}
+function setHtml(target, html) {
+  const doc = new DOMParser().parseFromString("<body>" + String(html ?? "") + "</body>", "text/html");
+  cleanNode(doc.body);
+  for (const table of doc.body.querySelectorAll("table")) { const wrap = doc.createElement("div"); wrap.className = "table-scroll"; table.replaceWith(wrap); wrap.append(table); }
+  target.replaceChildren(...[...doc.body.childNodes].map((n) => document.importNode(n, true)));
+  return target;
+}
 
-function applyConfig(next) {
-  config = isPlainObject(next) ? next : {};
-  eyebrowElement.textContent = config.eyebrow ? String(config.eyebrow) : "";
-  eyebrowElement.hidden = !config.eyebrow;
-  ledeElement.replaceChildren();
-  withCode(ledeElement, config.lede || defaultLede);
-  const paragraphs = Array.isArray(config.footer)
-    ? config.footer.map((text) => withCode(element("p"), text))
-    : defaultFooter.map((node) => node.cloneNode(true));
-  footerElement.replaceChildren(...paragraphs);
-  footerElement.hidden = footerElement.childElementCount === 0;
+// ---- who is who ----------------------------------------------------------
+function kinds() { return { ...DEFAULT_KINDS, ...(isObj(config.kinds) ? config.kinds : {}) }; }
+function labelFor(uid) {
+  if (uid && uid === me) return "You";
+  const set = isObj(config.people) ? config.people[uid] : "";
+  if (set) return set.charAt(0).toUpperCase() + set.slice(1);
+  if (config.owner && uid === config.owner) return "The owner";
+  return names[uid] || "Someone";
+}
+function myAudience() { if (isOwner) return "owner"; return (isObj(config.people) && config.people[me]) || ""; }
+function forMe(item) { return !item.for || item.for === myAudience(); }
+async function refreshNames() {
+  if (!userApi || !userApi.profiles) return;
+  const ids = [...new Set([...people.keys(), ...answers.keys()])].filter((id) => id && id !== me);
+  if (!ids.length) return;
+  try {
+    const ps = await userApi.profiles(ids);
+    let changed = false;
+    for (const id of ids) { const n = (ps && ps[id] && ps[id].name) || ""; if (n && names[id] !== n) { names[id] = n; changed = true; } }
+    if (changed) render();
+  } catch (e) {}
+}
+
+// ---- answers ---------------------------------------------------------------
+function isCurrent(item, answer) { return Boolean(answer) && (!item || !item.askedAt || String(answer.at || "") >= String(item.askedAt)); }
+function hasContent(item, a) { if (!a) return false; const choices = arr(item && item.choices); return Boolean(a.choice || (!choices.length && String(a.note || "").trim())); }
+function answerOf(uid, id) { return (answers.get(uid) || new Map()).get(id) || null; }
+function myAnswer(id) { const d = drafts.get(id); const s = me ? answerOf(me, id) : null; if (d && (!s || String(d.at) > String(s.at || ""))) return d; return s; }
+function currentAnswers(item, id) {
+  const out = [];
+  for (const [uid, map] of answers) { const a = map.get(id); if (a && isCurrent(item, a) && hasContent(item, a)) out.push([uid, a]); }
+  return out;
+}
+function isAnswered(id) { const item = items.get(id); return currentAnswers(item, id).length > 0 || (me && hasContent(item, myAnswer(id)) && isCurrent(item, myAnswer(id))); }
+
+function sectionOf(item) { return item.status === "done" ? "done" : item.status === "waiting" ? "waiting" : "open"; }
+function isDecision(item) { return arr(item.choices).length >= 2 && item.group !== "yours"; }
+function sorted() { return [...items.entries()].sort(([, a], [, b]) => (a.priority ?? Infinity) - (b.priority ?? Infinity) || (a.order ?? 999) - (b.order ?? 999) || String(a.ref || "").localeCompare(String(b.ref || ""), undefined, { numeric: true })); }
+
+function subscribeAnswers(uid) {
+  if (!db || !uid || answerSubs.has(uid)) return;
+  answers.set(uid, answers.get(uid) || new Map());
+  const off = db.collection("people/" + uid + "/answers").onSnapshot((snap) => {
+    const map = new Map(); for (const d of snap.docs) map.set(d.id, d.data());
+    answers.set(uid, map);
+    if (uid === me) reconcileDrafts(map);
+    render(); refreshNames();
+  }, () => {});
+  answerSubs.set(uid, off);
+}
+
+function draftKey(id) { return "oq:draft:" + id; }
+function dropDraft(id, body) { if (!body || drafts.get(id) === body) { drafts.delete(id); store(draftKey(id)); } }
+// Drafts left by an earlier visit (a reload, a republish): save the ones the store doesn't have yet, once.
+function reconcileDrafts(map) {
+  for (const [id, d] of [...drafts]) {
+    if (pending.has(id) || saving.has(id)) continue;
+    const s = map.get(id);
+    const empty = !d.choice && !String(d.note || "").trim();
+    if ((s && String(s.at || "") >= String(d.at)) || (!s && empty)) dropDraft(id);
+    else saveMine(id, d, true);
+  }
+}
+
+function queueWrite(fn) { return fn().catch(async (error) => { if (error && error.code === "unavailable") { await new Promise((r) => setTimeout(r, 600 + Math.random() * 900)); return fn(); } throw error; }); }
+function handleWriteError(error) {
+  const code = error && error.code;
+  if (["invalid_argument", "not_granted", "capability_disabled", "capability_removed", "revoked"].includes(code)) {
+    readOnly = true; setStatus("This view can't save answers. Open the queue on claude.ai, signed in with an account it's shared with for editing. Copy all answers still works.", true);
+  } else if (code === "quota_exceeded") setStatus("The page's data store is full, so that wasn't saved. Copy all answers still works.", true);
+  else if (code === "resource_exhausted") setStatus("Too many saves at once. Wait a few seconds and try again.", true);
+  else setStatus("That wasn't saved. It's kept in this browser; try again.", true);
   render();
 }
-
-function isOpen(item) { return item.status === "open"; }
-function isCurrent(id, answer) {
-  const askedAt = items.get(id)?.askedAt;
-  return !askedAt || Boolean(answer.at && answer.at >= askedAt);
+async function touchPerson(extra) {
+  if (!db || !me) return;
+  const current = people.get(me) || {};
+  const body = { ...current, lastAnswerAt: nowIso(), ...(extra || {}) };
+  await queueWrite(() => db.doc("people/" + me).set(body));
 }
-function currentAnswer(id) {
-  const answer = answers.get(id);
-  return answer && isCurrent(id, answer) ? answer : null;
-}
-function earlierAnswer(id) {
-  const answer = answers.get(id);
-  return answer && !isCurrent(id, answer) ? answer : null;
-}
-function isAnswered(id) {
-  const answer = currentAnswer(id);
-  if (!answer) return false;
-  const choices = items.get(id)?.choices;
-  const hasChoices = Array.isArray(choices) && choices.length > 0;
-  return Boolean(answer.choice || (!hasChoices && answer.note));
-}
-function sectionOf(item) {
-  if (item.status === "done") return "done";
-  if (item.status === "waiting" || item.group === "waiting") return "waiting";
-  return "open";
-}
-function needsYou(id, item) { return isOpen(item) && sectionOf(item) === "open" && !isAnswered(id); }
-
-function sortedItems() {
-  return [...items.entries()].sort(([, first], [, second]) =>
-    (first.priority ?? Infinity) - (second.priority ?? Infinity) || (first.order ?? 999) - (second.order ?? 999));
-}
-
-function buildSections() {
-  queueElement.replaceChildren();
-  for (const section of SECTIONS) {
-    const root = element("section", "group");
-    root.id = section.key;
-    const head = element("div", "group-head");
-    const heading = element("h2", "", section.label);
-    const count = element("span", "count");
-    heading.append(count);
-    head.append(heading);
-    let bulkButton = null;
-    if (section.key === "open") {
-      bulkButton = element("button");
-      bulkButton.type = "button";
-      bulkButton.id = "accept-all";
-      bulkButton.hidden = true;
-      bulkButton.addEventListener("click", () => { const bulk = bulkSetting(); if (bulk) acceptAll(bulk.kind); });
-      head.append(bulkButton);
-    }
-    const list = element("ul", "items");
-    root.append(head, element("p", "blurb", section.blurb), list);
-    queueElement.append(root);
-    sectionViews.set(section.key, { section: root, list, count, bulkButton });
-  }
-  const done = element("details", "done");
-  done.id = "done";
-  const summary = element("summary", "", "Done");
-  const list = element("ul", "items");
-  done.append(summary, list);
-  queueElement.append(done);
-  sectionViews.set("done", { section: done, list, summary });
-}
-
-function createItemView(id) {
-  const root = element("li", "item");
-  root.id = "item-" + id;
-  const ref = element("div", "ref");
-  const body = element("div", "body");
-  const titleRow = element("div", "title-row");
-  const title = element("h3");
-  const kindChip = element("span", "chip kind");
-  const dueChip = element("span", "chip due");
-  const waitingChip = element("span", "chip waiting", "scheduled");
-  titleRow.append(title, kindChip, dueChip, waitingChip);
-  const priority = element("p", "priority");
-  const ask = element("p", "ask");
-  const sides = element("div", "sides");
-  const pick = element("p", "pick");
-  const meta = element("dl", "meta");
-  const steps = element("ol", "steps");
-  const context = element("p", "context");
-  const actions = element("div", "actions");
-  const note = element("div", "note");
-  const noteLabel = element("label");
-  const noteInput = element("input");
-  noteInput.type = "text";
-  noteInput.id = "note-" + id;
-  noteLabel.htmlFor = noteInput.id;
-  note.append(noteLabel, noteInput);
-  const clearButton = element("button", "link", "Clear");
-  clearButton.type = "button";
-  const earlierAnswers = element("div", "earlier-answers");
-  body.append(titleRow, priority, ask, sides, pick, meta, steps, context, actions, note, earlierAnswers);
-  root.append(ref, body);
-
-  const view = { root, ref, title, kindChip, dueChip, waitingChip, priority, ask, sides, pick, meta, steps, context, actions, clearButton, note, noteLabel, noteInput, noteTimer: 0, earlierAnswers, choicesKey: "", stepsKey: "" };
-  itemViews.set(id, view);
-
-  noteInput.addEventListener("input", () => {
-    noteInput.dataset.dirty = "1";
-    noteInput.classList.toggle("has-text", noteInput.value.trim() !== "");
-    clearTimeout(view.noteTimer);
-    view.noteTimer = setTimeout(() => saveNote(id), 800);
-  });
-  noteInput.addEventListener("blur", () => saveNote(id));
-  noteInput.addEventListener("keydown", (event) => { if (event.key === "Enter") saveNote(id); });
-  clearButton.addEventListener("click", () => clearChoice(id));
-  return view;
-}
-
-function updateItemView(id, item, rank, openCount, kinds) {
-  const view = itemViews.get(id) || createItemView(id);
-  const answer = currentAnswer(id) || {};
-  const answered = isAnswered(id);
-  const interactive = isOpen(item) && Boolean(database) && !readOnly;
-
-  view.root.classList.toggle("is-answered", answered);
-  view.ref.textContent = item.ref || "";
-  view.title.textContent = item.title || "";
-  view.kindChip.textContent = kinds[item.group] || "";
-  view.kindChip.hidden = !rank || !kinds[item.group];
-  view.dueChip.textContent = item.due || "";
-  view.dueChip.hidden = !item.due || answered;
-  view.waitingChip.hidden = item.status !== "waiting";
-  view.ask.replaceChildren();
-  if (item.ask) withCode(view.ask, item.ask);
-  view.ask.hidden = !item.ask;
-
-  view.pick.replaceChildren();
-  view.pick.classList.toggle("none", !item.pick);
-  if (item.pick) {
-    view.pick.append(element("span", "label", "My pick"));
-    withCode(view.pick, item.pick);
-  } else {
-    view.pick.textContent = item.status === "done" ? "" : "No pick from me. This one is yours.";
-  }
-  view.pick.hidden = item.status === "waiting" || item.status === "done";
-
-  view.meta.replaceChildren();
-  view.priority.replaceChildren();
-  if (rank) {
-    view.priority.append(element("span", "label", "Priority " + rank + " of " + openCount));
-    if (item.priorityReason) view.priority.append(document.createTextNode(item.priorityReason));
-  }
-  view.priority.hidden = !rank;
-
-  const metaRows = [["Effort", item.effort], ["Undo", item.undo], ["Unblocks", item.unblocks], ["Outcome", item.outcome]];
-  for (const [term, value] of metaRows) {
-    if (!value) continue;
-    view.meta.append(element("dt", "", term), withCode(element("dd"), value));
-  }
-  view.meta.hidden = view.meta.childElementCount === 0;
-
-  const steps = Array.isArray(item.steps) ? item.steps : [];
-  const stepsKey = JSON.stringify(steps);
-  if (stepsKey !== view.stepsKey) {
-    view.steps.replaceChildren();
-    for (const step of steps) {
-      const entry = element("li");
-      if (step.text) entry.append(withCode(element("p"), step.text));
-      if (step.command) {
-        const block = element("div", "command");
-        const pre = element("pre");
-        const code = element("code", "", step.command);
-        pre.append(code);
-        const copy = element("button", "", "Copy");
-        copy.type = "button";
-        copy.addEventListener("click", () => copyCommand(step.command, code, copy));
-        block.append(pre, copy);
-        entry.append(block);
-      }
-      view.steps.append(entry);
-    }
-    view.stepsKey = stepsKey;
-  }
-  view.steps.hidden = steps.length === 0;
-
-  view.context.textContent = item.source ? "Source: " + item.source : "";
-  view.context.hidden = !item.source;
-
-  const choices = Array.isArray(item.choices) ? item.choices : [];
-  const choicesKey = JSON.stringify(choices);
-  if (choicesKey !== view.choicesKey) {
-    view.actions.replaceChildren();
-    for (const choice of choices) {
-      const button = element("button", "", choice.label);
-      if (choice.primary) button.append(element("span", "tag", "Recommended"));
-      button.type = "button";
-      button.id = "choice-" + id + "-" + choice.key;
-      button.dataset.key = choice.key;
-      button.addEventListener("click", () => choose(id, choice));
-      view.actions.append(button);
-    }
-    view.actions.append(view.clearButton);
-    view.sides.replaceChildren();
-    for (const choice of choices) {
-      const pros = Array.isArray(choice.pros) ? choice.pros : [];
-      const cons = Array.isArray(choice.cons) ? choice.cons : [];
-      if (pros.length === 0 && cons.length === 0) continue;
-      const list = element("ul", "case");
-      for (const pro of pros) list.append(withCode(element("li", "pro"), pro));
-      for (const con of cons) list.append(withCode(element("li", "con"), con));
-      const side = element("section", "side");
-      side.append(element("h4", "", choice.label), list);
-      view.sides.append(side);
-    }
-    view.choicesKey = choicesKey;
-  }
-  view.sides.hidden = !isOpen(item) || view.sides.childElementCount === 0;
-  for (const button of view.actions.querySelectorAll("button[data-key]")) {
-    button.classList.toggle("is-chosen", answer.choice === button.dataset.key);
-    button.disabled = !interactive;
-  }
-  view.clearButton.hidden = !interactive || !answer.choice;
-  view.actions.hidden = !isOpen(item) || choices.length === 0;
-
-  view.note.hidden = !isOpen(item);
-  view.noteLabel.textContent = item.input || "Note (optional)";
-  view.noteInput.disabled = !interactive;
-  if (document.activeElement !== view.noteInput && !view.noteInput.dataset.dirty) {
-    view.noteInput.value = answer.note || "";
-  }
-  view.noteInput.classList.toggle("has-text", view.noteInput.value.trim() !== "");
-
-  view.earlierAnswers.replaceChildren();
-  const history = Array.isArray(item.history) ? [...item.history] : [];
-  const earlier = earlierAnswer(id);
-  if (earlier && !history.some((entry) => entry.at === earlier.at)) history.push(earlier);
-  for (const entry of history) {
-    const label = entry.choiceLabel || entry.choice;
-    if (!label && !entry.note) continue;
-    const line = element("p", "answer-line");
-    line.append(element("span", "label", "Earlier answer"));
-    if (label) line.append(element("span", "", label));
-    if (entry.note) line.append(element("span", "", "“" + entry.note + "”"));
-    view.earlierAnswers.append(line);
-  }
-  view.earlierAnswers.hidden = view.earlierAnswers.childElementCount === 0;
-  return view;
-}
-
-async function copyCommand(text, code, button) {
+async function saveMine(id, body, fromDraft) {
+  if (!body.at) body.at = nowIso();
+  drafts.set(id, body); store(draftKey(id), body);
+  render();
+  if (!db || !me || readOnly) return;
+  saving.add(id);
+  setStatus("Saving…");
   try {
-    await navigator.clipboard.writeText(text);
-    button.textContent = "Copied";
-  } catch (error) {
-    const range = document.createRange();
-    range.selectNodeContents(code);
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-    button.textContent = "Selected: press Ctrl+C or ⌘C";
-  }
-  setTimeout(() => { button.textContent = "Copy"; }, 2500);
+    if (!body.choice && !String(body.note || "").trim()) await queueWrite(() => db.doc("people/" + me + "/answers/" + id).delete());
+    else await queueWrite(() => db.doc("people/" + me + "/answers/" + id).set({ choice: body.choice || "", choiceLabel: body.choiceLabel || "", note: body.note || "", at: body.at }));
+    dropDraft(id, body);      // saved: the store has it now, unless something newer was typed meanwhile
+    if (!people.has(me) || !people.get(me).lastAnswerAt) await touchPerson();
+    const saved = $("saved-" + id); if (saved) saved.textContent = "Saved " + when(body.at);
+    setStatus(config.savedText || (fromDraft ? "Saved what you typed before the page reloaded." : "Saved."));
+  } catch (error) { handleWriteError(error); }
+  finally { saving.delete(id); }
+}
+function choose(id, choice) {
+  const item = items.get(id); const cur = myAnswer(id); const note = noteValue(id, cur);
+  const same = cur && isCurrent(item, cur) && cur.choice === choice.key;
+  clearTimeout(pending.get(id)); pending.delete(id);
+  saveMine(id, { choice: same ? "" : choice.key, choiceLabel: same ? "" : choice.label, note, at: nowIso() });
+}
+function noteValue(id, cur) { const v = views.get(id); if (v && v.note) return v.note.value; return (cur && cur.note) || ""; }
+function noteChanged(id) {
+  const v = views.get(id) || freeView; const item = items.get(id);
+  v.note.classList.toggle("has-text", v.note.value.trim() !== "");
+  const cur = myAnswer(id); const keep = cur && isCurrent(item, cur) ? cur : {};
+  const body = { choice: keep.choice || "", choiceLabel: keep.choiceLabel || "", note: v.note.value, at: nowIso() };
+  drafts.set(id, body); store(draftKey(id), body);
+  clearTimeout(pending.get(id));
+  pending.set(id, setTimeout(() => { pending.delete(id); saveMine(id, body); }, 800));
+}
+function flushPending() { const saves = []; for (const [id, timer] of [...pending]) { clearTimeout(timer); pending.delete(id); const d = drafts.get(id); if (d) saves.push(saveMine(id, d)); } return Promise.all(saves); }
+
+// ---- views ---------------------------------------------------------------
+function itemView(id) {
+  let v = views.get(id); if (v) return v;
+  const root = el("article", "item"); root.id = "item-" + id;
+  const head = el("div", "item-head"), ref = el("span", "ref"), title = el("h3"), chips = el("div", "chips");
+  head.append(ref, title, chips);
+  const priority = el("p", "priority"), ask = el("p", "ask"), context = el("div", "context");
+  const opts = el("div", "opts"); opts.setAttribute("role", "radiogroup");
+  const pick = el("p", "pick"), meta = el("dl", "meta"), needs = el("div", "context"), steps = el("ol", "steps"), prompt = el("div");
+  const boxLabel = el("label", "box-label"), noteText = el("span"), clear = el("button", "link", "Clear my answer");
+  clear.type = "button"; boxLabel.append(noteText, clear);
+  const note = el("textarea"); note.id = "note-" + id; note.rows = 2; boxLabel.htmlFor = note.id;
+  const saved = el("div", "saved"); saved.id = "saved-" + id;
+  const others = el("div", "others"), history = el("div", "history"), source = el("p", "source");
+  root.append(head, priority, ask, context, opts, pick, meta, needs, steps, prompt, boxLabel, note, saved, others, history, source);
+  v = { root, ref, title, chips, priority, ask, context, opts, pick, meta, needs, steps, prompt, boxLabel, noteText, clear, note, saved, others, history, source, keys: {} };
+  note.addEventListener("input", () => noteChanged(id));
+  note.addEventListener("blur", () => { if (pending.has(id)) { clearTimeout(pending.get(id)); pending.delete(id); const d = drafts.get(id); if (d) saveMine(id, d); } });
+  clear.addEventListener("click", () => { clearTimeout(pending.get(id)); pending.delete(id); note.value = ""; saveMine(id, { choice: "", choiceLabel: "", note: "", at: nowIso() }); });
+  views.set(id, v);
+  return v;
+}
+function changedKey(v, name, value) { const k = JSON.stringify(value ?? null); if (v.keys[name] === k) return false; v.keys[name] = k; return true; }
+function commandBlock(text, labelText) {
+  const block = el("div", "command"), pre = el("pre"), code = el("code", "", text), copy = el("button", "", labelText || "Copy");
+  copy.type = "button"; pre.append(code); block.append(pre, copy);
+  copy.addEventListener("click", () => copyText(text, code, copy, labelText || "Copy"));
+  return block;
+}
+async function copyText(text, node, button, label) {
+  try { await navigator.clipboard.writeText(text); button.textContent = "Copied"; }
+  catch (e) { const range = document.createRange(); range.selectNodeContents(node); const s = getSelection(); s.removeAllRanges(); s.addRange(range); button.textContent = "Selected: press Ctrl+C"; }
+  setTimeout(() => { button.textContent = label; }, 2500);
 }
 
-function showEmpty() {
-  document.getElementById("placeholder").replaceChildren(element("strong", "", "The queue is empty"), element("span", "", "Nothing waits on you right now. New entries appear here when I add them."));
-  document.getElementById("tally").replaceChildren(element("strong", "", "Needs you: 0"));
+function updateItem(id, item, rank, openCount) {
+  const v = itemView(id); const k = kinds();
+  const open = item.status !== "done" && item.status !== "waiting";
+  const interactive = open && Boolean(db) && Boolean(me) && !readOnly;
+  const mine = myAnswer(id); const mineCurrent = mine && isCurrent(item, mine) ? mine : null;
+  v.root.classList.toggle("is-answered", open && isAnswered(id));
+  v.ref.textContent = item.ref || "";
+  if (changedKey(v, "title", item.title)) { v.title.replaceChildren(); withCode(v.title, item.title || ""); }
+  v.chips.replaceChildren();
+  if (open && k[item.group]) v.chips.append(el("span", "chip", k[item.group]));
+  if (item.for) v.chips.append(el("span", "chip for", item.for === myAudience() ? "For you" : "For " + item.for));
+  if (item.lowPriority) v.chips.append(el("span", "chip low", "low priority"));
+  if (item.due && open) v.chips.append(el("span", "chip due", item.due));
+  if (item.status === "waiting") v.chips.append(el("span", "chip low", "scheduled"));
+  v.chips.hidden = !v.chips.childElementCount;
+
+  v.priority.replaceChildren();
+  if (rank) { v.priority.append(el("span", "label", "Priority " + rank + " of " + openCount)); if (item.priorityReason) withCode(v.priority, item.priorityReason); }
+  v.priority.hidden = !rank;
+  if (changedKey(v, "ask", item.ask)) { v.ask.replaceChildren(); withCode(v.ask, item.ask || ""); }
+  v.ask.hidden = !item.ask || item.ask === item.title || item.status === "done";
+  if (changedKey(v, "context", item.context)) setHtml(v.context, item.context || "");
+  v.context.hidden = !item.context || item.status === "done";
+
+  const choices = arr(item.choices);
+  if (changedKey(v, "choices", [choices, item.secondOpinion])) {
+    v.opts.replaceChildren();
+    for (const c of choices) {
+      const b = el("button", "opt"); b.type = "button"; b.dataset.key = c.key; b.setAttribute("role", "radio");
+      const lab = el("span", "opt-label"); withCode(lab, c.label);
+      if (c.primary && item.group !== "yours") lab.append(el("span", "badge", "Recommended"));
+      const so = isObj(item.secondOpinion) ? item.secondOpinion : null;
+      if (so && so.choice === c.key) lab.append(el("span", "badge second", so.label || "Second opinion"));
+      b.append(lab);
+      const pros = arr(c.pros), cons = arr(c.cons);
+      if (pros.length || cons.length) { const ul = el("ul", "case"); for (const p of pros) ul.append(withCode(el("li", "pro"), p)); for (const p of cons) ul.append(withCode(el("li", "con"), p)); b.append(ul); }
+      if (c.cost) b.append(withCode(el("span", "opt-cost", "Cost to build: "), c.cost));
+      b.addEventListener("click", () => { if (!b.disabled) choose(id, c); });
+      v.opts.append(b);
+    }
+  }
+  for (const b of v.opts.querySelectorAll("button.opt")) { b.setAttribute("aria-checked", String(Boolean(mineCurrent && mineCurrent.choice === b.dataset.key))); b.disabled = !interactive; }
+  v.opts.hidden = !open || !choices.length;
+  v.opts.setAttribute("aria-label", item.title || "Options");
+
+  v.pick.replaceChildren();
+  if (item.pick && open) { v.pick.append(el("span", "label", "My pick")); withCode(v.pick, item.pick); }
+  v.pick.hidden = !item.pick || !open;
+
+  v.meta.replaceChildren();
+  for (const [term, value] of [["Effort", item.effort], ["Cost to build", item.cost], ["Undo", item.undo], ["Unblocks", item.unblocks], ["Outcome", item.outcome]]) {
+    if (!value) continue; v.meta.append(el("dt", "", term), withCode(el("dd"), value));
+  }
+  v.meta.hidden = !v.meta.childElementCount;
+  if (changedKey(v, "needs", item.needs)) { v.needs.replaceChildren(); if (item.needs) { v.needs.append(el("span", "label", "What you'll need")); v.needs.append(withCode(el("p"), item.needs)); } }
+  v.needs.hidden = !item.needs || !open;
+  if (changedKey(v, "steps", item.steps)) {
+    v.steps.replaceChildren();
+    for (const s of arr(item.steps)) { const li = el("li"); if (s.text) li.append(withCode(el("p"), s.text)); if (s.command) li.append(commandBlock(s.command)); v.steps.append(li); }
+  }
+  v.steps.hidden = !arr(item.steps).length || !open;
+  if (changedKey(v, "prompt", item.prompt)) { v.prompt.replaceChildren(); if (item.prompt) { v.prompt.append(el("span", "label", "When you're ready, paste this into the chat")); v.prompt.append(commandBlock(item.prompt, "Copy prompt")); } }
+  v.prompt.hidden = !item.prompt || !open;
+
+  v.noteText.textContent = item.input || (choices.length ? "Note (optional)" : "Your answer");
+  v.boxLabel.hidden = v.note.hidden = !open;
+  v.note.disabled = !interactive;
+  v.clear.hidden = !interactive || !(mineCurrent && (mineCurrent.choice || mineCurrent.note));
+  if (document.activeElement !== v.note && !pending.has(id)) v.note.value = (mineCurrent && mineCurrent.note) || "";
+  v.note.classList.toggle("has-text", v.note.value.trim() !== "");
+  if (!open) v.saved.textContent = "";
+
+  v.others.replaceChildren();
+  for (const [uid, a] of currentAnswers(item, id)) {
+    if (uid === me) continue;
+    const line = el("p", "answer-line"); line.append(el("span", "who", labelFor(uid) + ":"));
+    if (a.choiceLabel || a.choice) line.append(el("span", "", a.choiceLabel || a.choice));
+    if (String(a.note || "").trim()) line.append(el("span", "said", "“" + a.note.trim() + "”"));
+    line.append(el("span", "stamp", when(a.at))); v.others.append(line);
+  }
+  v.others.hidden = !v.others.childElementCount;
+
+  v.history.replaceChildren();
+  const hist = arr(item.history).slice();
+  for (const [uid, map] of answers) { const a = map.get(id); if (a && !isCurrent(item, a) && (a.choice || a.note) && !hist.some((h) => h.at === a.at)) hist.push({ who: uid === me ? "You" : labelFor(uid), choiceLabel: a.choiceLabel || a.choice, note: a.note, at: a.at }); }
+  hist.sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
+  if (hist.length) v.history.append(el("span", "label", "Previous answers"));
+  for (const h of hist) {
+    const line = el("p", "answer-line");
+    if (h.at) line.append(el("span", "stamp", when(h.at)));
+    if (h.who) line.append(el("span", "who", h.who + ":"));
+    if (h.choiceLabel) line.append(el("span", "", h.choiceLabel));
+    if (String(h.note || "").trim()) line.append(el("span", "said", "“" + String(h.note).trim() + "”"));
+    v.history.append(line);
+  }
+  v.history.hidden = !hist.length;
+  v.source.textContent = item.source ? "Source: " + item.source : "";
+  v.source.hidden = !item.source;
+  return v.root;
+}
+
+// ---- sections ----------------------------------------------------------------
+const SECTIONS = [
+  { key: "person", title: "Needs you, in person", blurb: "Only what's ready for you now, each with what you'll need and a prompt to paste into the chat when you're ready." },
+  { key: "urgent", title: "The three most urgent decisions", blurb: "The decisions that cost the most while they wait, with the arguments for and against. Redone at each submit and report." },
+  { key: "open", title: "Your queue", blurb: "Most important first. Each says why it ranks where it does." },
+  { key: "panels", title: "", blurb: "" },
+  { key: "waiting", title: "Scheduled", blurb: "Not on you. Listed so you know what runs next." },
+];
+const sectionViews = new Map();
+function buildSections() {
+  const main = $("queue"); main.replaceChildren();
+  for (const s of SECTIONS) {
+    const root = el("section", "section"); root.id = "section-" + s.key;
+    if (s.key !== "panels") {
+      const head = el("div", "section-head"), h = el("h2", "", s.title), count = el("span", "count");
+      h.append(count); head.append(h);
+      if (s.key === "open") { const bulk = el("button", "", ""); bulk.type = "button"; bulk.hidden = true; bulk.id = "bulkBtn"; bulk.addEventListener("click", acceptAll); head.append(bulk); }
+      root.append(head, el("p", "blurb", s.blurb));
+      sectionViews.set(s.key, { root, count, keys: {}, list: root.appendChild(el("div", "list")) });
+    } else sectionViews.set(s.key, { root, keys: {}, list: root.appendChild(el("div", "list")) });
+    main.append(root);
+  }
+}
+
+function renderPanels() {
+  const view = sectionViews.get("panels"); const panels = arr(config.panels);
+  if (!changedKey(view, "panels", panels)) return;
+  view.list.replaceChildren();
+  for (const p of panels) {
+    const sec = el("section", "section"), head = el("div", "section-head"); head.append(el("h2", "", p.title || ""));
+    sec.append(head); if (p.note) sec.append(withCode(el("p", "blurb"), p.note));
+    const body = setHtml(el("div", "panel context"), p.html || ""); sec.append(body);
+    view.list.append(sec);
+  }
+  view.root.hidden = !panels.length;
 }
 
 function render() {
-  if (!itemsLoaded) return;
-  if (items.size === 0 && sectionViews.size === 0) {
-    showEmpty();
-    return;
+  if (!loaded.items) return;
+  $("placeholder")?.remove();
+  if (!sectionViews.size) buildSections();
+  const all = sorted();
+  const open = all.filter(([, it]) => sectionOf(it) === "open");
+  const ranks = new Map(open.map(([id], i) => [id, i + 1]));
+  const person = open.filter(([, it]) => it.group === "yours");
+  const useUrgent = config.urgent !== false;
+  const urgent = useUrgent ? open.filter(([, it]) => isDecision(it) && !it.lowPriority).slice(0, 3) : [];
+  const urgentIds = new Set(urgent.map(([id]) => id));
+  const rest = open.filter(([id, it]) => it.group !== "yours" && !urgentIds.has(id));
+  const placed = { person, urgent, open: rest, waiting: all.filter(([, it]) => sectionOf(it) === "waiting") };
+  for (const [key, list] of Object.entries(placed)) {
+    const view = sectionViews.get(key);
+    const nodes = list.map(([id, it]) => updateItem(id, it, key === "waiting" ? 0 : ranks.get(id), open.length));
+    const cur = [...view.list.children];
+    if (cur.length !== nodes.length || cur.some((n, i) => n !== nodes[i])) view.list.replaceChildren(...nodes);
+    view.count.textContent = String(list.length);
+    view.root.hidden = key === "open" ? open.length > 0 && list.length === 0 : list.length === 0;
   }
-  document.getElementById("placeholder")?.remove();
-  if (sectionViews.size === 0) buildSections();
+  const doneList = all.filter(([, it]) => sectionOf(it) === "done");
+  const doneNodes = doneList.map(([id, it]) => updateItem(id, it, 0, 0));
+  const cur = [...$("done-list").children];
+  if (cur.length !== doneNodes.length || cur.some((n, i) => n !== doneNodes[i])) $("done-list").replaceChildren(...doneNodes);
+  $("done-summary").textContent = "Done (" + doneList.length + ")";
+  $("done-section").hidden = !doneList.length;
+  for (const [id, v] of views) if (!items.has(id)) { v.root.remove(); views.delete(id); }
+  if (!open.length) sectionViews.get("open").list.replaceChildren(el("p", "blurb", "Nothing is open right now. New questions appear here as they're added."));
+  renderPanels();
+  renderFree(); renderFeed(); renderTally(open); renderSubmit(); renderBulk(open);
+}
 
-  const kinds = kindLabels();
-  const sorted = sortedItems();
-  const openCount = sorted.filter(([, item]) => sectionOf(item) === "open").length;
-  const placed = new Map([...sectionViews.keys()].map((key) => [key, []]));
-  for (const [id, item] of sorted) {
-    const key = sectionOf(item);
-    const rank = key === "open" ? placed.get("open").length + 1 : 0;
-    placed.get(key).push(updateItemView(id, item, rank, openCount, kinds).root);
-  }
-  for (const [id, view] of itemViews) {
-    if (!items.has(id)) { view.root.remove(); itemViews.delete(id); }
-  }
-
-  for (const [key, view] of sectionViews) {
-    const roots = placed.get(key);
-    const current = [...view.list.children];
-    if (current.length !== roots.length || current.some((node, index) => node !== roots[index])) {
-      view.list.append(...roots);
-    }
-    view.section.hidden = roots.length === 0;
-  }
-
-  const openItems = sorted.filter(([, item]) => sectionOf(item) === "open");
-  const total = openItems.filter(([id, item]) => needsYou(id, item)).length;
-  const answeredHere = openItems.filter(([id, item]) => isOpen(item) && isAnswered(id)).length;
-  sectionViews.get("open").count.textContent = total + " open";
-  sectionViews.get("waiting").count.textContent = String(placed.get("waiting").length);
-  sectionViews.get("done").summary.textContent = "Done (" + placed.get("done").length + ")";
-  const bulk = bulkSetting();
-  const bulkButton = sectionViews.get("open").bulkButton;
-  const pendingBulk = bulk ? openItems.filter(([id, item]) => item.group === bulk.kind && needsYou(id, item) && primaryChoice(item)) : [];
-  bulkButton.hidden = pendingBulk.length < 2;
-  bulkButton.textContent = (bulk?.label || DEFAULT_TEXT.bulkLabel) + " (" + pendingBulk.length + ")";
-  bulkButton.disabled = !database || readOnly;
-
-  const tally = document.getElementById("tally");
-  tally.replaceChildren(element("strong", "", "Needs you: " + total));
+function renderTally(open) {
+  const answered = open.filter(([id]) => isAnswered(id)).length;
+  const needs = open.filter(([id, it]) => !isAnswered(id) && forMe(it)).length;
+  const t = $("tally"); t.replaceChildren(el("strong", "", "Needs you: " + needs));
   const parts = [];
-  if (answeredHere) parts.push(answeredHere + " " + configText("pendingText"));
-  if (total === 0 && !answeredHere) parts.push("nothing waits on you");
-  if (parts.length) tally.append(element("span", "", parts.join(". ") + "."));
+  if (answered) parts.push(answered + " " + (config.pendingText || "answered, waiting for Claude"));
+  if (!needs && !answered) parts.push("nothing waits on you");
+  if (parts.length) t.append(el("span", "", parts.join(". ") + "."));
+  const answerable = open.length;
+  $("fill").style.width = (answerable ? 100 * answered / answerable : 0) + "%";
+  $("plabel").textContent = answered + " of " + answerable + " answered";
 }
 
-function primaryChoice(item) {
-  return (Array.isArray(item.choices) ? item.choices : []).find((choice) => choice.primary);
+function renderBulk(open) {
+  const b = $("bulkBtn"); if (!b) return;
+  const bulk = isObj(config.bulk) && config.bulk.kind ? config.bulk : null;
+  const list = bulk ? open.filter(([id, it]) => it.group === bulk.kind && !isAnswered(id) && arr(it.choices).some((c) => c.primary)) : [];
+  b.hidden = list.length < 2; b.disabled = !db || !me || readOnly;
+  b.textContent = ((bulk && bulk.label) || "Accept all my picks") + " (" + list.length + ")";
 }
-
-function queueWrite(id, operation) {
-  const previous = writeChains.get(id) || Promise.resolve();
-  const next = previous.then(operation);
-  writeChains.set(id, next.catch(() => {}));
-  return next;
-}
-
-async function writeWithRetry(operation) {
-  try {
-    return await operation();
-  } catch (error) {
-    if (error && error.code === "unavailable") {
-      await new Promise((resolve) => setTimeout(resolve, 600 + Math.random() * 900));
-      return operation();
-    }
-    throw error;
-  }
-}
-
-function handleWriteError(error) {
-  const code = error && error.code;
-  if (code === "invalid_argument" || code === "not_granted" || code === "capability_disabled" || code === "capability_removed" || code === "revoked") {
-    readOnly = true;
-    setStatus("This view can't save answers. Open the queue on claude.ai, signed in as its owner.", true);
-  } else if (code === "quota_exceeded") {
-    setStatus("The page's data store is full, so that answer wasn't saved.", true);
-  } else if (code === "resource_exhausted") {
-    setStatus("Too many saves at once. Wait a few seconds and try again.", true);
-  } else {
-    setStatus("That answer wasn't saved. Try again.", true);
-  }
-  render();
-}
-
-async function saveAnswer(id, patch) {
-  if (!database || readOnly) return;
-  const current = currentAnswer(id) || {};
-  const body = {
-    choice: current.choice || "",
-    choiceLabel: current.choiceLabel || "",
-    note: current.note || "",
-    ...patch,
-    at: new Date().toISOString(),
-  };
-  answers.set(id, body);
-  render();
-  setStatus("Saving…");
-  try {
-    await queueWrite(id, () => writeWithRetry(() => database.collection("answers").doc(id).set(body)));
-    setStatus(configText("savedText"));
-  } catch (error) {
-    handleWriteError(error);
-  }
-}
-
-function choose(id, choice) {
-  const view = itemViews.get(id);
-  const patch = { choice: choice.key, choiceLabel: choice.label };
-  if (view && view.noteInput.dataset.dirty) {
-    clearTimeout(view.noteTimer);
-    patch.note = view.noteInput.value.trim();
-    delete view.noteInput.dataset.dirty;
-  }
-  saveAnswer(id, patch);
-}
-
-function saveNote(id) {
-  const view = itemViews.get(id);
-  if (!view) return;
-  clearTimeout(view.noteTimer);
-  if (!view.noteInput.dataset.dirty) return;
-  delete view.noteInput.dataset.dirty;
-  const note = view.noteInput.value.trim();
-  const current = currentAnswer(id) || {};
-  if (note === (current.note || "")) return;
-  if (!note && !current.choice) {
-    deleteAnswer(id);
-    return;
-  }
-  saveAnswer(id, { note });
-}
-
-function clearChoice(id) {
-  const view = itemViews.get(id);
-  if (!view) return;
-  clearTimeout(view.noteTimer);
-  delete view.noteInput.dataset.dirty;
-  const note = view.noteInput.value.trim();
-  if (note) saveAnswer(id, { choice: "", choiceLabel: "", note });
-  else deleteAnswer(id);
-}
-
-async function deleteAnswer(id) {
-  if (!database || readOnly) return;
-  answers.delete(id);
-  render();
-  setStatus("Clearing…");
-  try {
-    await queueWrite(id, () => writeWithRetry(() => database.collection("answers").doc(id).delete()));
-    setStatus("Cleared.");
-  } catch (error) {
-    handleWriteError(error);
-  }
-}
-
-async function acceptAll(kind) {
-  const pending = sortedItems().filter(([id, item]) => item.group === kind && needsYou(id, item) && primaryChoice(item));
-  for (const [id, item] of pending) {
-    const choice = primaryChoice(item);
-    await saveAnswer(id, { choice: choice.key, choiceLabel: choice.label });
+async function acceptAll() {
+  const bulk = isObj(config.bulk) ? config.bulk : null; if (!bulk) return;
+  for (const [id, it] of sorted()) {
+    if (sectionOf(it) !== "open" || it.group !== bulk.kind || isAnswered(id)) continue;
+    const c = arr(it.choices).find((x) => x.primary); if (c) await saveMine(id, { choice: c.key, choiceLabel: c.label, note: noteValue(id, myAnswer(id)), at: nowIso() });
     if (readOnly) return;
   }
 }
 
-function showUnavailable(text) {
-  const placeholder = document.getElementById("placeholder");
-  if (placeholder) {
-    placeholder.replaceChildren(element("strong", "", "The queue can't load in this view"), element("span", "", text));
+// ---- Anything else ---------------------------------------------------------
+const freeView = { note: $("note-anything-else"), saved: $("saved-anything-else") };
+freeView.note.addEventListener("input", () => noteChanged(FREE_ID));
+freeView.note.addEventListener("blur", () => { if (pending.has(FREE_ID)) { clearTimeout(pending.get(FREE_ID)); pending.delete(FREE_ID); const d = drafts.get(FREE_ID); if (d) saveMine(FREE_ID, d); } });
+function renderFree() {
+  $("free-section").hidden = false;
+  const mine = myAnswer(FREE_ID);
+  if (document.activeElement !== freeView.note && !pending.has(FREE_ID)) freeView.note.value = (mine && mine.note) || "";
+  freeView.note.classList.toggle("has-text", freeView.note.value.trim() !== "");
+  freeView.note.disabled = !db || !me || readOnly;
+  const box = $("others-anything-else"); box.replaceChildren();
+  for (const [uid, map] of answers) {
+    if (uid === me) continue; const a = map.get(FREE_ID);
+    if (!a || !String(a.note || "").trim()) continue;
+    const line = el("p", "answer-line"); line.append(el("span", "who", labelFor(uid) + ":"), el("span", "said", a.note.trim()), el("span", "stamp", when(a.at))); box.append(line);
   }
-  document.getElementById("tally").replaceChildren(element("strong", "", "Needs you: ?"), element("span", "", "The queue didn't load."));
+  box.hidden = !box.childElementCount;
 }
 
-function onSubscriptionError(error) {
-  const code = error && error.code;
-  if (code === "revoked") {
-    readOnly = true;
-    setStatus("This view lost access to the queue's data.", true);
-  } else {
-    setStatus("Lost the live connection to the queue. Reload the page to reconnect.", true);
+// ---- For information -------------------------------------------------------
+function renderFeed() {
+  if (!loaded.feed) return;
+  const now = Date.now();
+  const keep = [...feed.values()].filter((f) => now - Date.parse(f.at) < FEED_HOURS * 3600e3).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const list = $("feed-list");
+  if (!changedKey(feedKeys, "feed", keep.map((f) => [f.at, f.html]))) return;
+  list.replaceChildren(...keep.map((f) => { const li = el("li"); li.append(el("span", "stamp", when(f.at) + "  ")); const body = setHtml(el("span"), f.html); li.append(body); return li; }));
+  $("feed-empty").hidden = keep.length > 0;
+  $("feed-section").hidden = false;
+}
+const feedKeys = { keys: {} };
+
+// ---- Submit ----------------------------------------------------------------
+function unsafe() { return isObj(config.unsafe) ? config.unsafe : {}; }
+function wakes(uid) { const u = unsafe(); return Boolean(u.unattendedWake) && (uid === config.owner || (uid === me && isOwner) || Boolean(u.collaboratorWake)); }
+function pendingSubmit(uid) { const p = people.get(uid); if (!p || !p.submittedAt) return null; const r = receipts.get(uid); return r && String(r.readAt || "") >= String(p.submittedAt) ? null : p.submittedAt; }
+function renderSubmit() {
+  const b = $("submitBtn"); b.disabled = !db || !me || readOnly || submitting;
+  const mine = me && people.get(me); const r = me && receipts.get(me);
+  b.textContent = submitting ? "Submitting…" : mine && pendingSubmit(me) ? "Submit again" : "Submit answers";
+  const line = $("submitLine"); line.replaceChildren();
+  if (mine && mine.submittedAt) {
+    if (r && String(r.readAt || "") >= String(mine.submittedAt)) line.append(el("span", "", "Claude read your answers on " + when(r.readAt) + "."));
+    else {
+      let how;
+      if (wakes(me)) how = "Claude is woken within seconds while this queue is open in Claude Desktop on the owner's laptop.";
+      else if (isOwner) how = "Tell your Claude session you've answered.";
+      else how = "The owner sees this and passes it on.";
+      line.append(el("span", "", "Submitted on " + when(mine.submittedAt) + ". " + how));
+    }
   }
+  for (const [uid] of people) {
+    if (uid === me) continue; const at = pendingSubmit(uid); if (!at) continue;
+    line.append(el("span", "", labelFor(uid) + " submitted on " + when(at) + (isOwner && !wakes(uid) ? ". Tell your Claude session when you want it read." : ".")));
+  }
+  const u = unsafe(), warn = $("unsafe");
+  const w = [];
+  if (u.unattendedWake) w.push("Unattended wake is on: the owner's submits start Claude with nobody watching.");
+  if (u.unattendedWake && u.collaboratorWake) w.push("Collaborator wake is on: anyone this queue is shared with can start Claude by submitting.");
+  warn.textContent = w.join(" "); warn.hidden = !w.length;
+  mirror();
+}
+let submitting = false;
+async function submitAnswers() {
+  if (submitting || !db || !me) return;
+  submitting = true; renderSubmit();
+  try {
+    await flushPending();   // the answers first, so a submit never points at unsaved notes
+    if (readOnly) return;
+    await touchPerson({ submittedAt: nowIso() });
+    setStatus("Submitted.");
+  } catch (error) { handleWriteError(error); }
+  finally { submitting = false; renderSubmit(); }
+}
+// Unattended wake, only when the owner turned it on with an unsafe flag: the owner's own copy of the page, open in
+// Claude Desktop, writes the newest submit allowed to wake into this browser's storage, where queue_watch.py reads it.
+function mirror() {
+  const u = unsafe(); if (!u.unattendedWake || !isOwner || !config.queueKey) return;
+  let best = null;
+  for (const [uid] of people) { const at = pendingSubmit(uid); if (at && wakes(uid) && (!best || at > best.at)) best = { at, by: uid }; }
+  const key = "owner-queue:" + config.queueKey + ":submitted";
+  const prev = load(key);
+  const next = best ? { ready: true, at: best.at, by: best.by } : { ready: false, at: (prev && prev.at) || null };
+  if (!prev || prev.ready !== next.ready || prev.at !== next.at) store(key, next);
+}
+
+// ---- Copy all answers ------------------------------------------------------
+function asText() {
+  const lines = [];
+  for (const [id, it] of sorted()) {
+    if (sectionOf(it) === "done") continue;
+    const rows = currentAnswers(it, id); const mine = me ? myAnswer(id) : null;
+    if (mine && isCurrent(it, mine) && hasContent(it, mine) && !rows.some(([uid]) => uid === me)) rows.push([me, mine]);
+    for (const [uid, a] of rows) {
+      lines.push("- " + (it.ref ? it.ref + " " : "") + (it.title || id) + " [" + labelFor(uid) + "]: " + (a.choiceLabel || a.choice || "(no choice)") + (String(a.note || "").trim() ? "\n  note: " + a.note.trim().replace(/\n/g, "\n  ") : ""));
+    }
+  }
+  for (const [uid, map] of answers) { const a = map.get(FREE_ID); if (a && String(a.note || "").trim()) lines.push("## Anything else [" + labelFor(uid) + "]\n" + a.note.trim()); }
+  return lines.join("\n");
+}
+async function copyAll() {
+  const text = asText() || "(no answers yet)"; const out = $("copyOut");
+  try { await navigator.clipboard.writeText(text); out.hidden = true; setStatus("Copied all answers."); }
+  catch (e) { out.hidden = false; out.value = text; out.focus(); out.select(); setStatus("Select the text below and copy it."); }
+}
+
+// ---- Ping ------------------------------------------------------------------
+function unlockAudio() { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === "suspended") audio.resume(); } catch (e) {} }
+function tone(ctx, t0, hz, type, at, attack, len, peak, to) {
+  const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.value = hz;
+  g.gain.setValueAtTime(0.0001, t0 + at); g.gain.exponentialRampToValueAtTime(peak, t0 + at + attack); g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + len);
+  o.connect(g).connect(to); o.start(t0 + at); o.stop(t0 + at + len + 0.05);
+}
+const SOUNDS = {
+  chime(ctx, t0) { tone(ctx, t0, 660, "sine", 0, 0.01, 0.5, 0.2, ctx.destination); tone(ctx, t0, 990, "sine", 0.14, 0.01, 0.6, 0.16, ctx.destination); },
+  beeps(ctx, t0) { tone(ctx, t0, 880, "sine", 0, 0.02, 0.15, 0.25, ctx.destination); tone(ctx, t0, 1320, "sine", 0.16, 0.02, 0.15, 0.25, ctx.destination); },
+  divine(ctx, t0) {
+    const out = ctx.createGain(); out.gain.value = 1.4;
+    const n = Math.floor(ctx.sampleRate * 2.4), ir = ctx.createBuffer(2, n, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3); }
+    const hall = ctx.createConvolver(); hall.buffer = ir;
+    const bus = ctx.createGain(), dry = ctx.createGain(), wet = ctx.createGain(); dry.gain.value = 0.7; wet.gain.value = 0.3;
+    bus.connect(dry).connect(out); bus.connect(hall).connect(wet).connect(out); out.connect(ctx.destination);
+    const soft = ctx.createBiquadFilter(); soft.type = "lowpass"; soft.frequency.value = 2200; soft.connect(bus);
+    for (const hz of [523.25, 659.26, 783.99, 1046.5]) for (const cents of [-6, 6]) tone(ctx, t0, hz * Math.pow(2, cents / 1200), "triangle", 0, 0.4, 2.0, 0.045, soft);
+    [783.99, 1046.5, 1318.51, 1567.98].forEach((hz, i) => tone(ctx, t0, hz, "triangle", 0.05 + i * 0.075, 0.005, 0.9, 0.11, bus));
+    tone(ctx, t0, 2093, "sine", 0.38, 0.005, 1.4, 0.05, bus);
+  },
+};
+function ping() {
+  window.__pings = (window.__pings || 0) + 1;
+  const sound = SOUNDS[config.sound] || (config.sound === "none" ? null : SOUNDS.chime);
+  if (!sound || !audio || audio.state !== "running") return;
+  sound(audio, audio.currentTime + 0.02);
+}
+function paintPing() { const b = $("pingBtn"); b.setAttribute("aria-pressed", String(pingOn)); b.textContent = pingOn ? "Ping on updates: on" : "Ping me on updates"; }
+function noteUpdate() {
+  if (firstContent) return;
+  if (pingOn) ping();
+  setStatus("Updated at " + new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date()) + ".");
+}
+
+// ---- Panels: downloads and a playable build ----------------------------------
+let downloads = null;
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(a) { let c = 0xFFFFFFFF; for (let i = 0; i < a.length; i++) c = CRC[(c ^ a[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+async function zipFiles(paths, folder) {
+  const enc = new TextEncoder(), body = [], dir = []; let off = 0;
+  for (const p of paths) {
+    const r = await fetch(p); if (!r.ok) throw new Error("missing " + p);
+    const data = new Uint8Array(await r.arrayBuffer()), name = enc.encode(folder + "/" + p.split("/").pop()), crc = crc32(data);
+    const h = new DataView(new ArrayBuffer(30)); h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(12, 0x21, true); h.setUint32(14, crc, true); h.setUint32(18, data.length, true); h.setUint32(22, data.length, true); h.setUint16(26, name.length, true);
+    const c = new DataView(new ArrayBuffer(46)); c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(14, 0x21, true); c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+    body.push(h, name, data); dir.push(c, name); off += 30 + name.length + data.length;
+  }
+  const size = dir.reduce((n, x) => n + x.byteLength, 0), e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, paths.length, true); e.setUint16(10, paths.length, true); e.setUint32(12, size, true); e.setUint32(16, off, true);
+  return new Blob([...body, ...dir, e], { type: "application/zip" });
+}
+function relative(path) { return path && !/^[a-z][a-z0-9+.-]*:/i.test(path) && !path.startsWith("//") ? path : null; }
+document.addEventListener("click", async (ev) => {
+  const b = ev.target.closest && ev.target.closest("[data-save], [data-save-zip], [data-play]");
+  if (!b || !b.closest(".context, .panel")) return;
+  ev.preventDefault();
+  let note = b.nextElementSibling && b.nextElementSibling.classList.contains("save-note") ? b.nextElementSibling : null;
+  if (!note) { note = el("span", "stamp save-note"); b.after(note); }
+  const say = (t) => { note.textContent = t; };
+  if (b.hasAttribute("data-play")) {
+    const src = relative(b.getAttribute("data-play")); if (!src) return;
+    let frame = b.parentElement.querySelector(".play-frame");
+    if (frame) { frame.remove(); b.textContent = b.dataset.label || "Play here"; return; }
+    b.dataset.label = b.textContent;
+    frame = el("div", "play-frame"); const iframe = document.createElement("iframe");
+    iframe.title = "Test build"; iframe.allow = "fullscreen; pointer-lock"; iframe.src = src; frame.append(iframe);
+    b.parentElement.append(frame); b.textContent = "Close"; iframe.focus(); return;
+  }
+  if (!downloads) { say(" Downloading isn't available here."); return; }
+  try {
+    const zip = b.getAttribute("data-save-zip"), path = relative(b.getAttribute("data-save"));
+    if (zip) say(" Packing…");
+    const files = zip ? (b.getAttribute("data-files") || "").split(/\s+/).map(relative).filter(Boolean) : [];
+    const blob = zip ? await zipFiles(files, zip.replace(/\.zip$/, "")) : await (await fetch(path)).blob();
+    await downloads.save({ filename: zip || path.split("/").pop(), data: blob });
+    say(" Saved.");
+  } catch (e) { const code = e && e.code; if (code === "declined") { say(""); return; } say(code === "rate_limited" ? " A save is already waiting for your answer." : " Downloading isn't available here."); }
+});
+
+// ---- config ------------------------------------------------------------------
+const defaultLede = $("lede").innerHTML;
+const defaultFooter = $("footer").innerHTML;
+function applyConfig(next) {
+  config = isObj(next) ? next : {};
+  $("eyebrow").textContent = config.eyebrow || ""; $("eyebrow").hidden = !config.eyebrow;
+  if (config.lede) setHtml($("lede"), config.lede); else $("lede").innerHTML = defaultLede;
+  if (Array.isArray(config.footer)) { $("footer").replaceChildren(...config.footer.map((t) => withCode(el("p"), t))); $("footer").hidden = !config.footer.length; }
+  else { $("footer").innerHTML = defaultFooter; $("footer").hidden = false; }
+  if (isObj(config.people) || config.owner) for (const uid of [...Object.keys(config.people || {}), config.owner].filter(Boolean)) subscribeAnswers(uid);
   render();
 }
 
-async function start() {
-  try {
-    database = await window.claude?.use?.("db");
-  } catch (error) {
-    database = null;
-  }
-  if (!database) {
-    showUnavailable("Entries live in this page's data store, which this view can't reach. Open the queue on claude.ai while signed in.");
-    return;
-  }
-  database.collection("config").onSnapshot((snapshot) => {
-    const page = snapshot.docs.find((doc) => doc.id === "page");
-    applyConfig(page ? page.data() : {});
-  }, onSubscriptionError);
-  database.collection("items").onSnapshot((snapshot) => {
-    items.clear();
-    for (const doc of snapshot.docs) items.set(doc.id, doc.data());
-    itemsLoaded = true;
-    render();
-  }, onSubscriptionError);
-  database.collection("answers").onSnapshot((snapshot) => {
-    answers.clear();
-    for (const doc of snapshot.docs) answers.set(doc.id, doc.data());
-    render();
-  }, onSubscriptionError);
+// ---- start -------------------------------------------------------------------
+function showUnavailable(text) {
+  const ph = $("placeholder");
+  if (ph) ph.replaceChildren(el("strong", "", "The queue can't load in this view"), el("span", "", text));
+  $("tally").replaceChildren(el("strong", "", "Needs you: ?"), el("span", "", "The queue didn't load."));
 }
+function onSubError(error) {
+  if (error && error.code === "revoked") { readOnly = true; setStatus("This view lost access to the queue's data.", true); }
+  else setStatus("Lost the live connection to the queue. Reload the page to reconnect.", true);
+  render();
+}
+async function start() {
+  try { pingOn = localStorage.getItem("oq:ping") === "1"; } catch (e) {}
+  paintPing();
+  $("pingBtn").addEventListener("click", () => { pingOn = !pingOn; try { localStorage.setItem("oq:ping", pingOn ? "1" : "0"); } catch (e) {} if (pingOn) { unlockAudio(); setTimeout(ping, 60); } paintPing(); });
+  const unlock = () => { if (pingOn) unlockAudio(); };
+  document.addEventListener("pointerdown", unlock); document.addEventListener("keydown", unlock);
+  $("copyBtn").addEventListener("click", copyAll);
+  $("submitBtn").addEventListener("click", submitAnswers);
+  addEventListener("pagehide", flushPending);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) flushPending(); });
+  for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith("oq:draft:")) { const d = load(k); if (d && d.at) drafts.set(k.slice(9), d); } }
 
+  try { db = await window.claude?.use?.("db"); } catch (e) { db = null; }
+  if (!db) { showUnavailable("The questions live in this page's data store, which this view can't reach. Open the queue on claude.ai, signed in."); return; }
+  try { userApi = await window.claude.use("user"); } catch (e) { userApi = null; }
+  try { me = userApi ? await userApi.id() : null; isOwner = userApi ? Boolean(await userApi.isOwner()) : false; } catch (e) { me = null; }
+  try { downloads = await window.claude.use("downloads"); } catch (e) { downloads = null; }
+  if (!me) { readOnly = true; setStatus("This view has no identity on the queue, so it can't save answers. Copy all answers still works."); }
+  if (me) subscribeAnswers(me);
+
+  // Content only Claude writes. A ping and "Updated at" only when it really changed, not on every delivery.
+  const seen = {};
+  const changed = (name, snap) => { const sig = JSON.stringify(snap.docs.map((d) => [d.id, d.data()])); if (seen[name] === sig) return false; seen[name] = sig; return true; };
+  db.collection("config").onSnapshot((snap) => { if (!changed("config", snap)) return; const d = snap.docs.find((x) => x.id === "page"); const was = loaded.config; loaded.config = true; applyConfig(d ? d.data() : {}); if (was) noteUpdate(); }, onSubError);
+  db.collection("items").onSnapshot((snap) => {
+    if (!changed("items", snap)) return;
+    items.clear(); for (const d of snap.docs) items.set(d.id, d.data());
+    const was = loaded.items; loaded.items = true; render(); if (was) noteUpdate();
+  }, onSubError);
+  db.collection("feed").onSnapshot((snap) => {
+    if (!changed("feed", snap)) return;
+    feed.clear(); for (const d of snap.docs) feed.set(d.id, d.data());
+    const was = loaded.feed; loaded.feed = true; render(); if (was) noteUpdate();
+  }, onSubError);
+  db.collection("people").onSnapshot((snap) => {
+    people.clear(); for (const d of snap.docs) { people.set(d.id, d.data()); subscribeAnswers(d.id); }
+    render(); refreshNames();
+  }, onSubError);
+  db.collection("receipts").onSnapshot((snap) => { receipts.clear(); for (const d of snap.docs) receipts.set(d.id, d.data()); render(); }, onSubError);
+  setTimeout(() => { firstContent = false; }, 2500);
+  setInterval(renderFeed, 10 * 60e3);
+}
 start();
 </script>
