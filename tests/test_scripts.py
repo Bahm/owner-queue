@@ -226,6 +226,13 @@ class QueueScript(unittest.TestCase):
         self.assertEqual(q["secondOpinion"], {"choice": "all", "label": "Values review"})
         self.assertTrue(q["context"].startswith("<p><b>Protocol:</b> Two choices on the codec.</p>"), "the section's note travels with its first question")
         self.assertIn('"nextRef": "206"', self.run_q("status", "t").stdout)
+        # A migrated question keeps its 1.x id (q205); ask, close and wait find it by its ref or by that id.
+        edit = {**GOOD, "ref": "205"}
+        for extra in ((), ("--id", "q205"), ("--id", "205")):
+            r = self.run_q("ask", "t", self.item_file(edit), "--version", "1", *extra)
+            self.assertEqual([w["doc_id"] for w in self.writes(r)], ["q205"], extra)
+        for cmd in (("close", "t", "205", "--outcome", "x"), ("wait", "t", "205")):
+            self.assertEqual([w["doc_id"] for w in self.writes(self.run_q(*cmd, "--version", "2"))], ["q205"], cmd)
 
 
 class Watcher(unittest.TestCase):

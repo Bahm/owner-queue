@@ -397,6 +397,12 @@ def cmd_config(a):
     out.emit(note)
 
 
+def id_for(state, ref_or_id):
+    """The store id of a question: its ref in lower case, or the 1.x id a migrated question kept (state's `ids`)."""
+    key = str(ref_or_id or "").strip().lower()
+    return state.get("ids", {}).get(key) or re.sub(r"[^a-z0-9_.-]+", "-", key).strip("-")
+
+
 def next_ref(state):
     ref = f"{state['prefix']}{state['next']}"
     state["next"] += 1
@@ -415,7 +421,8 @@ def cmd_ask(a):
             if m:
                 state["next"] = max(state["next"], int(m.group(1)) + 1)
         item.setdefault("status", "open")
-    doc_id = item.pop("id", None) or re.sub(r"[^a-z0-9_.-]+", "-", str(item.get("ref") or a.id or "").lower()).strip("-")
+    given = item.pop("id", None)
+    doc_id = id_for(state, a.id or given or item.get("ref"))
     if not doc_id:
         die("No id: give the item a `ref` or `id`.")
     if doc_id == FREE_ID:
@@ -437,8 +444,9 @@ def cmd_close(a):
             "priority": {"__delete__": True}, "priorityReason": {"__delete__": True}}
     if a.undo:
         data["undo"] = a.undo
-    out = Out(state, "close-" + a.id)
-    out.add("update", "items", a.id, data, a.version)
+    doc_id = id_for(state, a.id)
+    out = Out(state, "close-" + doc_id)
+    out.add("update", "items", doc_id, data, a.version)
     out.emit()
 
 
@@ -447,8 +455,9 @@ def cmd_wait(a):
     data = {"status": "waiting", "priority": {"__delete__": True}, "priorityReason": {"__delete__": True}}
     if a.due:
         data["due"] = a.due
-    out = Out(state, "wait-" + a.id)
-    out.add("update", "items", a.id, data, a.version)
+    doc_id = id_for(state, a.id)
+    out = Out(state, "wait-" + doc_id)
+    out.add("update", "items", doc_id, data, a.version)
     out.emit()
 
 
@@ -704,6 +713,8 @@ def cmd_migrate(a):
             if it.get("for"):
                 item["for"] = it["for"]
             priority += 1
+            if item_id != id_for({}, ref):
+                state.setdefault("ids", {})[ref.lower()] = item_id   # so ask, close and wait find it by its ref too
             out.add("set", "items", item_id, item)
             migrated.append(ref)
     for author, at in touched.items():
