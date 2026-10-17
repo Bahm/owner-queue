@@ -75,6 +75,10 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - Lint warns when a question's context is mostly a pointer to another question: the reader needs what they decide on inside the question.
 - You answer on the queue, even when you asked in chat: a request for options or pros and cons becomes questions there (2.1.4).
 
+## Changes in 2.3
+
+- Each question folds to its number, title and a one-line summary (your answer, or its outcome once done); click the arrow or the title. For information folds as a whole. Expand all and Collapse all sit by the progress bar, and also open or close Done. Open questions start unfolded, done ones folded, and each viewer's folds are kept in their own browser.
+
 ## License
 
 MIT

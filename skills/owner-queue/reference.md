@@ -68,7 +68,7 @@ Plain-text fields render `backticks` as code and never as HTML. Everything a per
 
 ## The page, top to bottom
 
-Title, tally ("Needs you: n", "m answered, waiting for Claude"), status line, unsafe-flag warning. A sticky bar: progress, Submit answers, Ping me on updates, Copy all answers, and who submitted when. Then:
+Title, tally ("Needs you: n", "m answered, waiting for Claude"), status line, unsafe-flag warning. A sticky bar: progress with Expand all and Collapse all, Submit answers, Ping me on updates, Copy all answers, and who submitted when. Each question folds to its head and a one-line summary, For information folds as a whole, and folds are kept per viewer in their browser. Then:
 
 - Needs you, in person
 - The three most urgent decisions

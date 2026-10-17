@@ -129,13 +129,29 @@ a.qref { font-weight: 600; text-decoration-style: dotted; text-underline-offset:
 .feed li { overflow-wrap: anywhere; }
 .play-frame iframe { width: 100%; aspect-ratio: 16 / 9; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background: #0b1220; display: block; }
 details.done > summary { cursor: pointer; font-weight: 600; font-size: 1.05rem; }
+button.fold { flex: none; border: 0; background: none; padding: 0 .15rem; width: 1.6rem; height: 1.6rem; line-height: 1; color: var(--muted); font-size: .95rem; align-self: center; }
+button.fold::before { content: "▾"; display: inline-block; transition: transform .15s; }
+button.fold[aria-expanded="false"]::before { transform: rotate(-90deg); }
+.item-head h3 { cursor: pointer; }
+.item.is-collapsed { gap: .3rem; }
+.item.is-collapsed > :not(.item-head):not(.folded) { display: none !important; }
+.item:not(.is-collapsed) > .folded { display: none; }
+.folded { font-size: .86rem; color: var(--muted); padding-left: 1.85rem; overflow-wrap: anywhere; }
+.section-head h2 button.fold { margin-right: .15rem; vertical-align: .05rem; }
+.section-head h2 .fold-label { cursor: pointer; }
+#feed-section.is-collapsed .blurb, #feed-section.is-collapsed .feed { display: none; }
+.prow { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: .1rem .8rem; margin-top: .2rem; }
+.prow .plabel { margin-top: 0; }
+.folds { display: flex; gap: .8rem; }
+.folds button.link { font-size: .8rem; }
+@media (max-width: 34rem) { .folded { padding-left: 0; } }
 details.done .list { margin-top: .7rem; }
 details.done .item { opacity: .85; }
 .placeholder { border: 1px dashed var(--line); border-radius: 8px; padding: 1.3rem 1.1rem; color: var(--muted); display: grid; gap: .3rem; }
 .placeholder strong { color: var(--ink); }
 .footer { font-size: .84rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: .8rem; display: grid; gap: .35rem; }
 #copyOut { width: 100%; min-height: 12rem; font-family: var(--font-mono); font-size: .8rem; }
-@media (prefers-reduced-motion: reduce) { .fill, .item.flash, .feed li.flash { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .fill, .item.flash, .feed li.flash, button.fold::before { transition: none; } }
 </style>
 
 <div class="wrap">
@@ -150,7 +166,7 @@ details.done .item { opacity: .85; }
   </header>
 
   <div class="bar" id="bar">
-    <div class="progress"><div class="track"><div class="fill" id="fill"></div></div><div class="plabel" id="plabel">0 of 0 answered</div></div>
+    <div class="progress"><div class="track"><div class="fill" id="fill"></div></div><div class="prow"><div class="plabel" id="plabel">0 of 0 answered</div><span class="folds"><button type="button" class="link" id="expandAll">Expand all</button><button type="button" class="link" id="collapseAll">Collapse all</button></span></div></div>
     <button type="button" class="primary" id="submitBtn" disabled>Submit answers</button>
     <button type="button" class="toggle" id="pingBtn" aria-pressed="false">Ping me on updates</button>
     <button type="button" id="copyBtn">Copy all answers</button>
@@ -172,9 +188,9 @@ details.done .item { opacity: .85; }
   </section>
 
   <section class="section" id="feed-section" aria-labelledby="feed-h" hidden>
-    <div class="section-head"><h2 id="feed-h">For information</h2></div>
+    <div class="section-head"><h2 id="feed-h"><button type="button" class="fold" id="feedFold" aria-expanded="true" aria-controls="feed-body" aria-label="Collapse For information"></button><span class="fold-label" id="feedLabel">For information</span><span class="count" id="feed-count"></span></h2></div>
     <p class="blurb">Newest first, in your time. Anything older than 48 hours drops off.</p>
-    <div class="feed"><ul id="feed-list"></ul><p id="feed-empty" class="blurb" hidden>Nothing new in the last 48 hours.</p></div>
+    <div class="feed" id="feed-body"><ul id="feed-list"></ul><p id="feed-empty" class="blurb" hidden>Nothing new in the last 48 hours.</p></div>
   </section>
 
   <section class="section" id="done-section" hidden>
@@ -289,6 +305,36 @@ async function refreshNames() {
 }
 
 // ---- answers ---------------------------------------------------------------
+// ---- folding ---------------------------------------------------------------------
+// Each question folds to its head and a one-line summary; For information folds as a whole. What a viewer folded is
+// kept in their own browser only. Open questions start unfolded, done ones folded.
+let folds = {};                     // itemId -> true (folded) | false; "#feed" for For information
+try { folds = load("oq:folds") || {}; } catch (e) { folds = {}; }
+function isFolded(id, item) { return id in folds ? Boolean(folds[id]) : Boolean(item && item.status === "done"); }
+function setFolds(changes) { Object.assign(folds, changes); store("oq:folds", folds); render(); }
+function foldAll(folded) {
+  const changes = { "#feed": folded };
+  for (const id of items.keys()) changes[id] = folded;
+  $("done").open = !folded;
+  setFolds(changes);
+}
+function paintFeedFold() {
+  const folded = Boolean(folds["#feed"]);
+  $("feed-section").classList.toggle("is-collapsed", folded);
+  $("feedFold").setAttribute("aria-expanded", String(!folded));
+  $("feedFold").setAttribute("aria-label", (folded ? "Expand" : "Collapse") + " For information");
+}
+function foldSummary(id, item) {
+  if (item.status === "done") return item.outcome ? "Outcome: " + item.outcome : "Done.";
+  if (item.status === "waiting") return "Scheduled" + (item.due ? " for " + item.due : "") + ".";
+  const mine = myAnswer(id), cur = mine && isCurrent(item, mine) ? mine : null;
+  const choice = cur && cur.choice ? (arr(item.choices).find((c) => c.key === cur.choice) || {}).label || cur.choiceLabel || cur.choice : "";
+  const note = cur && String(cur.note || "").trim();
+  if (choice || note) return "Your answer: " + [choice, note ? "“" + (note.length > 80 ? note.slice(0, 79) + "…" : note) + "”" : ""].filter(Boolean).join(" ");
+  const others = currentAnswers(item, id).filter(([uid]) => uid !== me);
+  return others.length ? "Answered by " + others.map(([uid]) => labelFor(uid)).join(", ") + "." : "Not answered yet.";
+}
+
 // ---- links between questions ------------------------------------------------
 // A question's number anywhere in the page (G51; in a queue without a prefix, q224, #224 or "question 224") links to
 // that question, and each question lists the questions and For information entries that name it. Only numbers of
@@ -357,6 +403,8 @@ document.addEventListener("click", (event) => {
   event.preventDefault();
   const target = a.dataset.item ? $("item-" + a.dataset.item) : $("feed-" + a.dataset.feed); if (!target) return;
   const fold = target.closest("details"); if (fold && !fold.open) fold.open = true;
+  if (a.dataset.item && isFolded(a.dataset.item, items.get(a.dataset.item))) setFolds({ [a.dataset.item]: false });
+  if (a.dataset.feed && folds["#feed"]) setFolds({ "#feed": false });
   target.style.scrollMarginTop = ($("bar").offsetHeight + 12) + "px";
   target.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   target.setAttribute("tabindex", "-1"); target.focus({ preventScroll: true });
@@ -460,7 +508,9 @@ function itemView(id) {
   let v = views.get(id); if (v) return v;
   const root = el("article", "item"); root.id = "item-" + id;
   const head = el("div", "item-head"), ref = el("span", "ref"), title = el("h3"), chips = el("div", "chips");
-  head.append(ref, title, chips);
+  const fold = el("button", "fold"); fold.type = "button";
+  head.append(fold, ref, title, chips);
+  const folded = el("p", "folded");
   const priority = el("p", "priority"), ask = el("p", "ask"), context = el("div", "context");
   const opts = el("div", "opts"); opts.setAttribute("role", "radiogroup");
   const pick = el("p", "pick"), meta = el("dl", "meta"), needs = el("div", "context"), steps = el("ol", "steps"), prompt = el("div");
@@ -469,8 +519,11 @@ function itemView(id) {
   const note = el("textarea"); note.id = "note-" + id; note.rows = 2; boxLabel.htmlFor = note.id;
   const saved = el("div", "saved"); saved.id = "saved-" + id;
   const others = el("div", "others"), history = el("div", "history"), source = el("p", "source"), refby = el("p", "refby");
-  root.append(head, priority, ask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, note, saved, others, history, source);
-  v = { root, ref, title, chips, priority, ask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, noteText, clear, note, saved, others, history, source, keys: {} };
+  root.append(head, folded, priority, ask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, note, saved, others, history, source);
+  v = { root, fold, folded, ref, title, chips, priority, ask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, noteText, clear, note, saved, others, history, source, keys: {} };
+  const toggle = () => setFolds({ [id]: !isFolded(id, items.get(id)) });
+  fold.addEventListener("click", toggle);
+  title.addEventListener("click", (e) => { if (!(e.target instanceof Element && e.target.closest("a"))) toggle(); });
   note.addEventListener("input", () => noteChanged(id));
   note.addEventListener("blur", () => { if (pending.has(id)) { clearTimeout(pending.get(id)); pending.delete(id); const d = drafts.get(id); if (d) saveMine(id, d); } });
   clear.addEventListener("click", () => { clearTimeout(pending.get(id)); pending.delete(id); note.value = ""; saveMine(id, { choice: "", choiceLabel: "", note: "", at: nowIso() }); });
@@ -497,6 +550,11 @@ function updateItem(id, item, rank, openCount) {
   const mine = myAnswer(id); const mineCurrent = mine && isCurrent(item, mine) ? mine : null;
   v.root.classList.toggle("is-answered", open && isAnswered(id));
   v.ref.textContent = item.ref || "";
+  const isFold = isFolded(id, item);
+  v.root.classList.toggle("is-collapsed", isFold);
+  v.fold.setAttribute("aria-expanded", String(!isFold));
+  v.fold.setAttribute("aria-label", (isFold ? "Expand " : "Collapse ") + (item.ref || item.title || "question"));
+  v.folded.replaceChildren(); if (isFold) withCode(v.folded, foldSummary(id, item));
   if (changedKey(v, "title", item.title)) { v.title.replaceChildren(); withCode(v.title, item.title || ""); }
   v.chips.replaceChildren();
   if (open && k[item.group]) v.chips.append(el("span", "chip", k[item.group]));
@@ -663,7 +721,7 @@ function render() {
   for (const [id, v] of views) if (!items.has(id)) { v.root.remove(); views.delete(id); }
   if (!open.length) sectionViews.get("open").list.replaceChildren(el("p", "blurb", "Nothing is open right now. New questions appear here as they're added."));
   renderPanels();
-  renderFree(); renderFeed(); renderTally(open); renderSubmit(); renderBulk(open);
+  renderFree(); renderFeed(); paintFeedFold(); renderTally(open); renderSubmit(); renderBulk(open);
   for (const node of [$("lede"), $("feed-list"), $("others-anything-else"), sectionViews.get("panels").list]) linkRefs(node);
 }
 
@@ -728,6 +786,7 @@ function renderFeed() {
   if (!changedKey(feedKeys, "feed", keep.map(([fid, f]) => [fid, f.at, f.html]))) return;
   list.replaceChildren(...keep.map(([fid, f]) => { const li = el("li"); li.id = "feed-" + fid; li.append(el("span", "stamp", when(f.at) + "  ")); const body = setHtml(el("span"), f.html); li.append(body); return li; }));
   $("feed-empty").hidden = keep.length > 0;
+  $("feed-count").textContent = String(keep.length);
   $("feed-section").hidden = false;
 }
 const feedKeys = { keys: {} };
@@ -921,6 +980,9 @@ async function start() {
   const unlock = () => { if (pingOn) unlockAudio(); };
   document.addEventListener("pointerdown", unlock); document.addEventListener("keydown", unlock);
   $("copyBtn").addEventListener("click", copyAll);
+  $("expandAll").addEventListener("click", () => foldAll(false));
+  $("collapseAll").addEventListener("click", () => foldAll(true));
+  for (const id of ["feedFold", "feedLabel"]) $(id).addEventListener("click", () => setFolds({ "#feed": !folds["#feed"] }));
   $("submitBtn").addEventListener("click", submitAnswers);
   addEventListener("pagehide", flushPending);
   document.addEventListener("visibilitychange", () => { if (document.hidden) flushPending(); });
