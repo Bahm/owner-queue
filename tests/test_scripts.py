@@ -206,7 +206,7 @@ class QueueScript(unittest.TestCase):
     def test_migrate_page_html(self):
         self.init(prefix="")
         html_src = ('<p class="lede"><b>17 October:</b> two open.</p><script>\nconst FYI = [\n  {"at": "%s", "html": "x"},\n];\n'
-                    'const SECTIONS = [{"id": "s", "title": "Protocol", "note": "", "items": [{"id": "q205", "tag": "6.8 · dev tools", '
+                    'const SECTIONS = [{"id": "s", "title": "Protocol", "note": "Two choices on the codec.", "items": [{"id": "q205", "tag": "6.8 · dev tools", '
                     '"title": "Check the tools by their answers?", "ctx": "<p>c</p>", "opts": [["ans", "By answers", true], ["all", "Everything"]]}]}];\n'
                     'const PC = {"q205": {"ans": "+ fewer false alarms. − timings unchecked.", "all": "+ complete. − flaky."}};\n'
                     'const VR = {"q205": "all"};   // the values review\n</script>') % iso(5).replace(".000", "")
@@ -218,6 +218,7 @@ class QueueScript(unittest.TestCase):
         self.assertEqual(q["choices"][0]["pros"], ["fewer false alarms."])
         self.assertEqual(q["choices"][0]["cons"], ["timings unchecked."])
         self.assertEqual(q["secondOpinion"], {"choice": "all", "label": "Values review"})
+        self.assertTrue(q["context"].startswith("<p><b>Protocol:</b> Two choices on the codec.</p>"), "the section's note travels with its first question")
         self.assertIn('"nextRef": "206"', self.run_q("status", "t").stdout)
 
 

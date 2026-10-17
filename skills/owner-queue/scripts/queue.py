@@ -684,8 +684,9 @@ def cmd_migrate(a):
                     "context": it.get("ctx", ""), "choices": choices, "askedAt": asked,
                     "priority": priority, "priorityReason": f"Carried over from the 1.x page, where it sat under \"{s.get('title', '')}\". Re-rank it.",
                     "source": f"Migrated from the 1.x queue{(': ' + topic) if topic else ''}"}
-            if s.get("intro") and index == 0:
-                item["context"] = s["intro"] + item["context"]
+            if index == 0 and (s.get("intro") or s.get("note")):
+                lead = (f"<p><b>{html.escape(strip_tags(s.get('title', '')))}:</b> {html.escape(strip_tags(s['note']))}</p>" if s.get("note") else "")
+                item["context"] = lead + (s.get("intro") or "") + item["context"]
             if low:
                 item["lowPriority"] = True
             if vr.get(it["id"]) in [c["key"] for c in choices]:
