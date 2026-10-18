@@ -738,7 +738,8 @@ function render() {
     view.count.textContent = String(list.length);
     view.root.hidden = key === "open" ? open.length > 0 && list.length === 0 : list.length === 0;
   }
-  const doneList = all.filter(([, it]) => sectionOf(it) === "done");
+  // Newest first, as For information (the B4B collaborator, 18 October): `order` is the time a question was closed.
+  const doneList = all.filter(([, it]) => sectionOf(it) === "done").sort(([, a], [, b]) => (Number(b.order) || 0) - (Number(a.order) || 0));
   const doneNodes = doneList.map(([id, it]) => updateItem(id, it, 0, 0));
   const cur = [...$("done-list").children];
   if (cur.length !== doneNodes.length || cur.some((n, i) => n !== doneNodes[i])) $("done-list").replaceChildren(...doneNodes);

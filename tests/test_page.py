@@ -191,6 +191,15 @@ class PageTest(unittest.TestCase):
         self.assertIn("taken in", self.text("#item-g7 .meta").lower())
         self.assertEqual(self.errors, [])
 
+    def test_done_newest_first(self):
+        data = seed()
+        data["items/g8"] = {"ref": "G8", "title": "Closed later", "status": "done", "order": 1792300000}
+        data["items/g9"] = {"ref": "G9", "title": "Closed first", "status": "done", "order": 1792200000}
+        p = self.open(data)
+        refs = p.locator("#done-list .item .ref").all_text_contents()
+        self.assertEqual(refs[:2], ["G8", "G9"])
+        self.assertEqual(refs[-1], "G7", "a question without a close time goes last")
+
     def test_long_notes_show_their_start(self):
         report = "\n".join(f"line {n}: the bot stood still at 120 64 -30" for n in range(1, 1036))
         data = seed()
