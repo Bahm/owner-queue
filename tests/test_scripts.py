@@ -78,6 +78,26 @@ class QueueScript(unittest.TestCase):
         r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "5", "--reask")
         self.assertIn("askedAt", json.loads(Path(self.writes(r)[0]["file_path"]).read_text()))
 
+    def test_ask_again_before_sending_keeps_the_number(self):
+        self.init()
+        f = self.item_file({k: v for k, v in GOOD.items() if k != "ref"})
+        first = [w["doc_id"] for w in self.writes(self.run_q("ask", "t", f))]
+        self.assertEqual(json.loads(Path(f).read_text())["ref"], "G1", "the number is written into the file")
+        again = [w["doc_id"] for w in self.writes(self.run_q("ask", "t", f))]
+        self.assertEqual(first, again)
+        self.assertIn('"nextRef": "G2"', self.run_q("status", "t").stdout)
+        g = self.item_file({k: v for k, v in GOOD.items() if k != "ref"})
+        self.assertEqual([w["doc_id"] for w in self.writes(self.run_q("ask", "t", g, "--id", "G9"))], ["g9"], "--id names a new question")
+        self.assertEqual(json.loads(Path(g).read_text())["ref"], "G9")
+        self.assertIn('"nextRef": "G10"', self.run_q("status", "t").stdout)
+
+    def test_new_question_with_a_q_id_on_a_plain_queue(self):
+        self.init(prefix="")
+        f = self.item_file({k: v for k, v in GOOD.items() if k != "ref"})
+        self.assertEqual([w["doc_id"] for w in self.writes(self.run_q("ask", "t", f, "--id", "q233"))], ["q233"])
+        self.assertEqual(json.loads(Path(f).read_text())["ref"], "233")
+        self.assertEqual([w["doc_id"] for w in self.writes(self.run_q("close", "t", "233", "--outcome", "x", "--version", "1"))], ["q233"])
+
     def test_lint_errors_block_the_write(self):
         self.init()
         bad = {**GOOD, "context": '<img src="data:image/png;base64,AAAA">',

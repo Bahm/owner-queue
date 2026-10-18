@@ -411,15 +411,20 @@ def next_ref(state):
 
 def cmd_ask(a):
     state = load_state(a.slug)
-    item = json.loads(Path(a.file).read_text())
+    path = Path(a.file)
+    item = json.loads(path.read_text())
     new = a.version is None
+    numbered = None
     if new:
+        number = re.compile(rf"{re.escape(state['prefix'])}(\d+)" if state["prefix"] else r"q?(\d+)", re.I)
         if not item.get("ref"):
-            item["ref"] = next_ref(state)
-        else:
-            m = re.fullmatch(rf"{re.escape(state['prefix'])}(\d+)", item["ref"])
-            if m:
-                state["next"] = max(state["next"], int(m.group(1)) + 1)
+            # A new question takes its number from --id when that is one (G66, 233), else the next free one.
+            m = number.fullmatch(str(a.id or item.get("id") or "").strip())
+            item["ref"] = state["prefix"] + m.group(1) if m else next_ref(state)
+            numbered = item["ref"]
+        m = number.fullmatch(str(item["ref"]))
+        if m:
+            state["next"] = max(state["next"], int(m.group(1)) + 1)
         item.setdefault("status", "open")
     given = item.pop("id", None)
     doc_id = id_for(state, a.id or given or item.get("ref"))
@@ -427,15 +432,27 @@ def cmd_ask(a):
         die("No id: give the item a `ref` or `id`.")
     if doc_id == FREE_ID:
         die(f"'{FREE_ID}' is reserved for the Anything else box.")
+    if item.get("ref") and doc_id != id_for({}, item["ref"]):
+        state.setdefault("ids", {})[str(item["ref"]).lower()] = doc_id   # ask, close and wait find it by its ref
     if new or a.reask:
         item["askedAt"] = stamp()
     errors, warnings = lint_item(item, state)
     if not report(errors, warnings):
         die("Not written: fix the errors above.")
     save_state(state)
+    note = ""
+    if numbered:
+        # Keep the number with the file, so running ask on it again (to fix it before sending) reuses it.
+        try:
+            source = json.loads(path.read_text())
+            source["ref"] = numbered
+            path.write_text(json.dumps(source, ensure_ascii=False, indent=1) + "\n")
+            note = f" Numbered {numbered}, written into {path.name}: ask on it again reuses the number."
+        except OSError:
+            note = f" Numbered {numbered}; add \"ref\": \"{numbered}\" to {path.name} before running ask on it again."
     out = Out(state, "ask-" + doc_id)
     out.add("set" if new else "update", "items", doc_id, item, a.version)
-    out.emit(f"Item {item.get('ref') or doc_id} → items/{doc_id}." + (" Answers given before now show under Previous answers." if a.reask else ""))
+    out.emit(f"Item {item.get('ref') or doc_id} → items/{doc_id}." + note + (" Answers given before now show under Previous answers." if a.reask else ""))
 
 
 def cmd_close(a):
