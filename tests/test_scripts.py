@@ -220,12 +220,12 @@ class QueueScript(unittest.TestCase):
         put("people/u_des/answers/g4", {"choice": "", "choiceLabel": "", "note": "Neither: ask me tomorrow.", "at": iso(30)})
         put("people/u_des/answers/anything-else", {"note": "Report: stuck twice.", "at": iso(5)})
         r = self.run_q("take-in", "t", d, ok=False)
-        self.assertIn('--pins "G1=? G4=? u_des=?"', r.stdout + r.stderr, "it says which versions it needs")
+        self.assertIn('--pins "G1=? G4=? G3=? u_des=?"', r.stdout + r.stderr, "it says which versions it needs")
         self.assertEqual(self.writes(r), [])
-        r = self.run_q("take-in", "t", d, "--pins", "g1=3, G4=1 u_des=5")
+        r = self.run_q("take-in", "t", d, "--pins", "g1=3, G4=1 G3=2 u_des=5", "--reply", "G3=Not yet: it waits on the owner.")
         w = {(x["collection"], x["doc_id"]): x for x in self.writes(r)}
         self.assertEqual((w[("items", "g1")]["if_version"], w[("items", "g4")]["if_version"], w[("receipts", "u_des")]["if_version"]), (3, 1, 5))
-        self.assertEqual(sorted(k[1] for k in w if k[0] == "items"), ["g1", "g4"])
+        self.assertEqual(sorted(k[1] for k in w if k[0] == "items"), ["g1", "g3", "g4"], "g1 and g4 close; g3 gets a read mark")
         g1 = json.loads(Path(w[("items", "g1")]["file_path"]).read_text())
         self.assertEqual(g1["status"], "done")
         self.assertIn("takenAt", g1)
@@ -234,15 +234,20 @@ class QueueScript(unittest.TestCase):
         self.assertNotIn(("people/u_des/answers", "anything-else"), w, "never cleared unpinned")
         self.assertIn("NOT cleared", r.stdout)
         self.assertIn("G3 (a collaborator)", r.stdout)
+        g3 = json.loads(Path(w[("items", "g3")]["file_path"]).read_text())
+        self.assertEqual(set(g3), {"read"}, "input stays open; only its read mark is written")
+        self.assertEqual(g3["read"]["u_des"]["answerAt"], iso(30)[:16] + g3["read"]["u_des"]["answerAt"][16:])
+        self.assertEqual(g3["read"]["u_des"]["reply"], "Not yet: it waits on the owner.")
+        self.assertEqual(w[("items", "g3")]["if_version"], 2)
         self.assertIn("Send this batch before anything else", r.stdout)
         saved = re.search(r"saved to (\S+\.md)", r.stdout).group(1)
         self.assertEqual(Path(saved).read_text().strip(), "Report: stuck twice.")
-        r = self.run_q("take-in", "t", d, "--free", "u_des=7", "--outcome", "G1=Building the 16 m level.", "--pins", "G1=3 G4=1 u_des=5")
+        r = self.run_q("take-in", "t", d, "--free", "u_des=7", "--outcome", "G1=Building the 16 m level.", "--pins", "G1=3 G4=1 G3=2 u_des=5")
         clear = [x for x in self.writes(r) if x["doc_id"] == "anything-else"]
         self.assertEqual(clear[0]["if_version"], 7)
         g1 = [x for x in self.writes(r) if x["doc_id"] == "g1"][0]
         self.assertEqual(json.loads(Path(g1["file_path"]).read_text())["outcome"], "Building the 16 m level.")
-        self.assertNotEqual(self.run_q("take-in", "t", d, "--outcome", "G2=x", "--pins", "G1=3 G4=1 u_des=5", ok=False).returncode, 0,
+        self.assertNotEqual(self.run_q("take-in", "t", d, "--outcome", "G2=x", "--pins", "G1=3 G4=1 G3=2 u_des=5", ok=False).returncode, 0,
                             "a plan for an untaken question is refused")
         self.assertEqual([x for x in self.writes(r) if x["collection"] == "feed"], [], "take-in writes nothing under For information")
 

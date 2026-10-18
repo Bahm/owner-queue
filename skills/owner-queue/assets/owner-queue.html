@@ -117,6 +117,8 @@ textarea.has-text { border-color: var(--accent); }
 .answer-line .who { font-weight: 600; }
 .answer-line .said { white-space: pre-wrap; overflow-wrap: anywhere; }
 .answer-line .said button.link { margin-left: .3rem; white-space: nowrap; }
+.read-line { font-size: .84rem; color: var(--muted); display: grid; gap: .15rem; }
+.read-line .reply { color: var(--ink); border-left: 3px solid var(--accent); padding-left: .55rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 details.history > summary { cursor: pointer; font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 details.history[open] > summary { margin-bottom: .2rem; }
 .stamp { font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -348,6 +350,14 @@ function paintFeedFold() {
 }
 // A closed question carries one time, when it was closed (the owner, 18 October: "timestamps, but not excessively").
 function closedAt(item) { return item.takenAt || (Number(item.order) > 1e9 ? new Date(Number(item.order) * 1000).toISOString() : ""); }
+// A collaborator's answer to a question someone else decides stays open as input; take-in marks it read, with an
+// optional reply (the owner's O16). The mark holds only while the answer is the one that was read.
+function readMark(item, uid, a) { const r = isObj(item.read) && isObj(item.read[uid]) ? item.read[uid] : null; return r && a && String(r.answerAt) === String(a.at) ? r : null; }
+function readLines(target, r, decider, mine) {
+  const line = el("p", "", (mine ? "Claude read your note on " : "Read on ") + when(r.at) + (decider ? "; " + decider + " decides this one." : "."));
+  target.append(line);
+  if (r.reply) { const reply = el("p", "reply"); reply.append(el("span", "who", "Claude: ")); reply.append(said(r.reply, "reply|" + r.at, false)); target.append(reply); }
+}
 function clip(text, n) { return text.length > n ? text.slice(0, n - 1) + "…" : text; }
 function foldSummary(id, item) {
   if (item.status === "done") {
@@ -580,9 +590,10 @@ function itemView(id) {
   clear.type = "button"; boxLabel.append(noteText, clear);
   const note = el("textarea"); note.id = "note-" + id; note.rows = 2; boxLabel.htmlFor = note.id;
   const saved = el("div", "saved"); saved.id = "saved-" + id;
+  const readLine = el("div", "read-line");
   const others = el("div", "others"), history = el("details", "history"), source = el("p", "source"), refby = el("p", "refby");
-  root.append(head, folded, priority, ask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, note, saved, others, history, source);
-  v = { root, fold, folded, ref, title, chips, priority, ask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, noteText, clear, note, saved, others, history, source, keys: {} };
+  root.append(head, folded, priority, ask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, note, saved, readLine, others, history, source);
+  v = { root, fold, folded, ref, title, chips, priority, ask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, noteText, clear, note, saved, readLine, others, history, source, keys: {} };
   const toggle = () => setFolds({ [id]: !isFolded(id, items.get(id)) });
   fold.addEventListener("click", toggle);
   title.addEventListener("click", (e) => { if (!(e.target instanceof Element && e.target.closest("a"))) toggle(); });
@@ -683,6 +694,10 @@ function updateItem(id, item, rank, openCount) {
   v.note.classList.toggle("has-text", v.note.value.trim() !== "");
   if (!open) v.saved.textContent = "";
 
+  v.readLine.replaceChildren();
+  const myRead = open && mineCurrent ? readMark(item, me, mineCurrent) : null;
+  if (myRead) readLines(v.readLine, myRead, item.for === "owner" ? "the owner" : item.for === "collaborator" ? "collaborators" : "", true);
+  v.readLine.hidden = !myRead;
   v.others.replaceChildren();
   for (const [uid, a] of currentAnswers(item, id)) {
     if (uid === me && open) continue;   // yours is in the options and note box while it's open; on a closed question, here
@@ -691,6 +706,8 @@ function updateItem(id, item, rank, openCount) {
     if (String(a.note || "").trim()) line.append(said(a.note, id + "|" + uid + "|" + a.at, true));
     if (open) line.append(el("span", "stamp", when(a.at)));
     v.others.append(line);
+    const r = open ? readMark(item, uid, a) : null;
+    if (r) { const box = el("div", "read-line"); readLines(box, r, item.for === "owner" ? "the owner" : "", false); v.others.append(box); }
   }
   v.others.hidden = !v.others.childElementCount;
 

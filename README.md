@@ -91,6 +91,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - Answered questions show only under Done, with one time each, when they were closed; For information is for news that isn't about a question. `take-in` writes a line there only for a cleared Anything else (2.6.0, the owner's O14).
 - For information stays, for news only. `take-in` writes nothing there; the receipt reads "Claude took in your answers on <date, time>" (2.6.1, the owner's O15).
 - Every time on the page is the viewer's own: an ISO time (`2026-10-18T02:52Z`) or `<time datetime>` in any text is shown in each viewer's zone, and lint warns on "UTC" (2.7.0).
+- A collaborator's note on a question someone else decides shows as read once `take-in` has read it, with an optional reply under it (`take-in --reply REF=TEXT`; 2.8.0, the owner's O16).
 
 ## License
 

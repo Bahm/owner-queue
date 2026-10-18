@@ -219,6 +219,27 @@ class PageTest(unittest.TestCase):
         self.assertIn("9:52", self.text("#item-g1 .pick"))
         self.assertEqual(self.errors, [])
 
+    def test_input_on_the_owners_question_shows_as_read(self):
+        data = seed()
+        at = iso(20)
+        data["items/g3"].update({"for": "owner", "read": {"u_des": {"at": iso(5), "answerAt": at, "reply": "Not yet: it waits on the owner."}}})
+        data["people/u_des"] = {"lastAnswerAt": at}
+        data["people/u_des/answers/g3"] = {"choice": "", "choiceLabel": "", "note": "Any reason to wait?", "at": at}
+        p = self.open(data, cfg={"me": "u_des", "isOwner": False})
+        line = self.text("#item-g3 .read-line")
+        self.assertIn("Claude read your note on", line)
+        self.assertIn("the owner decides this one", line)
+        self.assertIn("Not yet: it waits on the owner.", line)
+        p.fill("#note-g3", "Any reason to wait? Still asking.")
+        p.wait_for_timeout(1200)
+        self.assertTrue(p.locator("#item-g3 .read-line").is_hidden(), "a changed note is unread again")
+        self.ctx.close()
+        data["people/u_des/answers/g3"]["note"] = "Any reason to wait?"
+        p = self.open(data)
+        self.assertIn("Read on", self.text("#item-g3 .others"))
+        self.assertIn("Not yet: it waits on the owner.", self.text("#item-g3 .others"))
+        self.assertEqual(self.errors, [])
+
     def test_long_notes_show_their_start(self):
         report = "\n".join(f"line {n}: the bot stood still at 120 64 -30" for n in range(1, 1036))
         data = seed()

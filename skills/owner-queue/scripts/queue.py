@@ -623,6 +623,8 @@ def cmd_take_in(a):
     who = lambda uid: "The owner" if uid == owner else "A collaborator"
     out = Out(state, "take-in")
     taken, inputs, kept, unsaved = {}, [], [], []
+    replies = {id_for(state, ref): text.strip() for ref, text in (pair.partition("=")[::2] for pair in a.reply or [])}
+    marks = {}   # item id -> its `read` map: input answers on a question someone else decides, marked read (O16)
     for uid in uids:
         for item_id, ans in sorted(read_dir(root, f"people/{uid}/answers").items()):
             note = str(ans.get("note", "")).strip()
@@ -646,12 +648,20 @@ def cmd_take_in(a):
                 continue
             decider = item.get("for")
             if decider and (decider == "owner") != (uid == owner):
-                inputs.append(f"{item.get('ref') or item_id} ({who(uid).lower()})")   # input, not a decision
+                # Input, not a decision: it stays open, and the page tells its writer it was read.
+                inputs.append(f"{item.get('ref') or item_id} ({who(uid).lower()})")
+                seen = (item.get("read") or {}).get(uid) or {}
+                reply = replies.get(item_id)
+                if seen.get("answerAt") != ans.get("at") or (reply and reply != seen.get("reply")):
+                    mark = {"at": stamp(t), "answerAt": ans.get("at")}
+                    if reply or seen.get("answerAt") == ans.get("at") and seen.get("reply"):
+                        mark["reply"] = reply or seen["reply"]
+                    marks.setdefault(item_id, dict(item.get("read") or {}))[uid] = mark
                 continue
             taken.setdefault(item_id, uid)
     unread = [uid for uid in uids if (people.get(uid) or {}).get("submittedAt")
               and not ((receipts.get(uid) or {}).get("readAt", "") >= people[uid]["submittedAt"])]
-    need = [items[i].get("ref") or i for i in taken if i not in pins] + [u for u in unread if u in receipts and u not in pins]
+    need = [items[i].get("ref") or i for i in [*taken, *marks] if i not in pins] + [u for u in unread if u in receipts and u not in pins]
     if need:
         die("Pin each write to the version the listing showed (a store write to an existing record needs it): "
             f"add --pins \"{' '.join(f'{n}=?' for n in need)}\"")
@@ -663,6 +673,12 @@ def cmd_take_in(a):
             data["outcome"] = plans[item_id]
         out.add("update", "items", item_id, data, pins[item_id])
         refs.append(items[item_id].get("ref") or item_id)
+    for item_id, read in marks.items():
+        if item_id not in taken:
+            out.add("update", "items", item_id, {"read": read}, pins[item_id])
+    stray = [ref for ref in replies if ref not in marks and ref not in taken]
+    if stray:
+        die("--reply for questions without a collaborator's input to answer: " + ", ".join(stray) + ".")
     stray = [ref for ref in plans if ref not in taken]
     if stray:
         die("--outcome for questions without a current answer to take in: " + ", ".join(stray) + ". Close those with `close`.")
@@ -679,7 +695,8 @@ def cmd_take_in(a):
     for uid, keep in unsaved:
         print(f"Anything else from {who(uid).lower()} saved to {keep}, NOT cleared: run again with --free {uid}=<its version from the listing>.")
     if inputs:
-        print("Answered by someone who doesn't decide them, left open as input: " + ", ".join(inputs) + ".")
+        print("Answered by someone who doesn't decide them, left open as input and marked read on the page: " + ", ".join(inputs) +
+              ". Answer a question asked in such a note with --reply REF=TEXT.")
     out.emit("Send this batch before anything else. Then act on the answers (queue.py answers lists them). Re-ask "
              "(ask --reask) any question whose answer leaves it open, and turn a note asking for more into a new question. "
              "What you'll do about an answer goes in its outcome (--outcome), not under For information.")
@@ -950,7 +967,7 @@ def main():
     p = sub.add_parser("fyi"); p.add_argument("slug"); p.add_argument("html"); p.set_defaults(fn=cmd_fyi)
     p = sub.add_parser("prune"); p.add_argument("slug"); p.add_argument("ids", nargs="*"); p.set_defaults(fn=cmd_prune)
     p = sub.add_parser("answers"); p.add_argument("slug"); p.add_argument("dir"); p.set_defaults(fn=cmd_answers)
-    p = sub.add_parser("take-in"); p.add_argument("slug"); p.add_argument("dir"); p.add_argument("--free", action="append", metavar="UID=VERSION", help="clear that person's Anything else, pinned to the version the listing showed"); p.add_argument("--outcome", action="append", metavar="REF=TEXT", help="what you'll do about that question's answer, shown on it"); p.add_argument("--pins", action="append", metavar='"REF=VERSION UID=VERSION …"', help="each answered question's and receipt's version, as the listing showed it"); p.set_defaults(fn=cmd_take_in)
+    p = sub.add_parser("take-in"); p.add_argument("slug"); p.add_argument("dir"); p.add_argument("--free", action="append", metavar="UID=VERSION", help="clear that person's Anything else, pinned to the version the listing showed"); p.add_argument("--outcome", action="append", metavar="REF=TEXT", help="what you'll do about that question's answer, shown on it"); p.add_argument("--reply", action="append", metavar="REF=TEXT", help="an answer shown under a collaborator's note on a question they don't decide"); p.add_argument("--pins", action="append", metavar='"REF=VERSION UID=VERSION …"', help="each answered question's and receipt's version, as the listing showed it"); p.set_defaults(fn=cmd_take_in)
     p = sub.add_parser("receipt"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int); p.set_defaults(fn=cmd_receipt)
     p = sub.add_parser("clear-free"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int, required=True); p.set_defaults(fn=cmd_clear_free)
     p = sub.add_parser("lint"); p.add_argument("files", nargs="+"); p.set_defaults(fn=cmd_lint)
