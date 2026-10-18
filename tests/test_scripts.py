@@ -216,8 +216,12 @@ class QueueScript(unittest.TestCase):
             put(f"people/u_des/answers/{item}", {"choice": "16", "choiceLabel": "16 m", "note": "go" if item == "g1" else "", "at": iso(30)})
         put("people/u_des/answers/g4", {"choice": "", "choiceLabel": "", "note": "Neither: ask me tomorrow.", "at": iso(30)})
         put("people/u_des/answers/anything-else", {"note": "Report: stuck twice.", "at": iso(5)})
-        r = self.run_q("take-in", "t", d)
+        r = self.run_q("take-in", "t", d, ok=False)
+        self.assertIn('--pins "G1=? G4=? u_des=?"', r.stdout + r.stderr, "it says which versions it needs")
+        self.assertEqual(self.writes(r), [])
+        r = self.run_q("take-in", "t", d, "--pins", "g1=3, G4=1 u_des=5")
         w = {(x["collection"], x["doc_id"]): x for x in self.writes(r)}
+        self.assertEqual((w[("items", "g1")]["if_version"], w[("items", "g4")]["if_version"], w[("receipts", "u_des")]["if_version"]), (3, 1, 5))
         self.assertEqual(sorted(k[1] for k in w if k[0] == "items"), ["g1", "g4"])
         g1 = json.loads(Path(w[("items", "g1")]["file_path"]).read_text())
         self.assertEqual(g1["status"], "done")
@@ -230,12 +234,13 @@ class QueueScript(unittest.TestCase):
         self.assertIn("Send this batch before anything else", r.stdout)
         saved = re.search(r"saved to (\S+\.md)", r.stdout).group(1)
         self.assertEqual(Path(saved).read_text().strip(), "Report: stuck twice.")
-        r = self.run_q("take-in", "t", d, "--free", "u_des=7", "--outcome", "G1=Building the 16 m level.")
+        r = self.run_q("take-in", "t", d, "--free", "u_des=7", "--outcome", "G1=Building the 16 m level.", "--pins", "G1=3 G4=1 u_des=5")
         clear = [x for x in self.writes(r) if x["doc_id"] == "anything-else"]
         self.assertEqual(clear[0]["if_version"], 7)
         g1 = [x for x in self.writes(r) if x["doc_id"] == "g1"][0]
         self.assertEqual(json.loads(Path(g1["file_path"]).read_text())["outcome"], "Building the 16 m level.")
-        self.assertNotEqual(self.run_q("take-in", "t", d, "--outcome", "G2=x", ok=False).returncode, 0, "a plan for an untaken question is refused")
+        self.assertNotEqual(self.run_q("take-in", "t", d, "--outcome", "G2=x", "--pins", "G1=3 G4=1 u_des=5", ok=False).returncode, 0,
+                            "a plan for an untaken question is refused")
         feed = [x for x in self.writes(r) if x["collection"] == "feed"][0]
         self.assertIn("Took in</b> G1, G4", json.loads(Path(feed["file_path"]).read_text())["html"])
 

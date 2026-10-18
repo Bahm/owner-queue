@@ -605,6 +605,8 @@ def cmd_take_in(a):
         die("List these with out_dir " + str(root) + " first: " + ", ".join(f"people/{u}/answers" for u in missing))
     free_versions = dict(pair.partition("=")[::2] for pair in a.free or [])
     plans = {id_for(state, ref): text.strip() for ref, text in (pair.partition("=")[::2] for pair in a.outcome or [])}
+    # The store takes a write to an existing record only pinned to its version; the listing prints the versions.
+    pins = {id_for(state, k) if not k.startswith("u_") else k: v for k, _, v in (p.partition("=") for p in " ".join(a.pins or []).replace(",", " ").split())}
     t = now()
     who = lambda uid: "The owner" if uid == owner else "A collaborator"
     out = Out(state, "take-in")
@@ -635,23 +637,27 @@ def cmd_take_in(a):
                 inputs.append(f"{item.get('ref') or item_id} ({who(uid).lower()})")   # input, not a decision
                 continue
             taken.setdefault(item_id, uid)
+    unread = [uid for uid in uids if (people.get(uid) or {}).get("submittedAt")
+              and not ((receipts.get(uid) or {}).get("readAt", "") >= people[uid]["submittedAt"])]
+    need = [items[i].get("ref") or i for i in taken if i not in pins] + [u for u in unread if u in receipts and u not in pins]
+    if need:
+        die("Pin each write to the version the listing showed (a store write to an existing record needs it): "
+            f"add --pins \"{' '.join(f'{n}=?' for n in need)}\"")
     refs = []
     for item_id in taken:
         data = {"status": "done", "takenAt": stamp(t), "order": int(t.timestamp()),
                 "priority": {"__delete__": True}, "priorityReason": {"__delete__": True}}
         if plans.get(item_id):
             data["outcome"] = plans[item_id]
-        out.add("update", "items", item_id, data)
+        out.add("update", "items", item_id, data, pins[item_id])
         refs.append(items[item_id].get("ref") or item_id)
     stray = [ref for ref in plans if ref not in taken]
     if stray:
         die("--outcome for questions without a current answer to take in: " + ", ".join(stray) + ". Close those with `close`.")
     read = []
-    for uid in uids:
-        sub, seen = (people.get(uid) or {}).get("submittedAt"), (receipts.get(uid) or {}).get("readAt")
-        if sub and not (seen and seen >= sub):
-            out.add("set", "receipts", uid, {"readAt": stamp(t)})
-            read.append(who(uid).lower())
+    for uid in unread:
+        out.add("set", "receipts", uid, {"readAt": stamp(t)}, pins.get(uid) if uid in receipts else None)
+        read.append(who(uid).lower())
     if refs or kept:
         parts = ([f"<b>Took in</b> {', '.join(refs)}."] if refs else []) + (["Anything else saved and cleared."] if kept else [])
         out.add("set", "feed", "f" + t.strftime("%Y%m%dT%H%M%S%f"), {"at": stamp(t), "html": " ".join(parts)})
@@ -932,7 +938,7 @@ def main():
     p = sub.add_parser("fyi"); p.add_argument("slug"); p.add_argument("html"); p.set_defaults(fn=cmd_fyi)
     p = sub.add_parser("prune"); p.add_argument("slug"); p.add_argument("ids", nargs="*"); p.set_defaults(fn=cmd_prune)
     p = sub.add_parser("answers"); p.add_argument("slug"); p.add_argument("dir"); p.set_defaults(fn=cmd_answers)
-    p = sub.add_parser("take-in"); p.add_argument("slug"); p.add_argument("dir"); p.add_argument("--free", action="append", metavar="UID=VERSION", help="clear that person's Anything else, pinned to the version the listing showed"); p.add_argument("--outcome", action="append", metavar="REF=TEXT", help="what you'll do about that question's answer, shown on it"); p.set_defaults(fn=cmd_take_in)
+    p = sub.add_parser("take-in"); p.add_argument("slug"); p.add_argument("dir"); p.add_argument("--free", action="append", metavar="UID=VERSION", help="clear that person's Anything else, pinned to the version the listing showed"); p.add_argument("--outcome", action="append", metavar="REF=TEXT", help="what you'll do about that question's answer, shown on it"); p.add_argument("--pins", action="append", metavar='"REF=VERSION UID=VERSION …"', help="each answered question's and receipt's version, as the listing showed it"); p.set_defaults(fn=cmd_take_in)
     p = sub.add_parser("receipt"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int); p.set_defaults(fn=cmd_receipt)
     p = sub.add_parser("clear-free"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int, required=True); p.set_defaults(fn=cmd_clear_free)
     p = sub.add_parser("lint"); p.add_argument("files", nargs="+"); p.set_defaults(fn=cmd_lint)

@@ -87,6 +87,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - A closed question shows everyone's answers, yours included, with a "Taken in" time; `take-in --outcome REF=TEXT` puts what Claude will do in its outcome instead of copying the answer there (2.5.0, the owner's O12).
 - Only the session that owns a queue publishes it (the owner). `queue.py answers` and `status` say when a newer page is available for it (2.5.1).
 - Done lists the most recently closed question first (2.5.2; the B4B collaborator asked).
+- `take-in --pins` pins each write to the version the listing showed; the store refuses an unpinned write to an existing record (2.5.3; the roc-ui session's report).
 
 ## License
 
