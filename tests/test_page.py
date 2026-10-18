@@ -173,6 +173,24 @@ class PageTest(unittest.TestCase):
         self.assertIn("is-answered", p.get_attribute("#item-g1", "class"))
         self.assertEqual(self.errors, [])
 
+    def test_closed_question_shows_the_answers(self):
+        data = seed()
+        data["items/g7"].update({"takenAt": iso(3), "outcome": "Building option B."})
+        data["people/u_owner"] = {"lastAnswerAt": iso(5)}
+        data["people/u_owner/answers/g7"] = {"choice": "b", "choiceLabel": "G7 option B", "note": "but keep it small", "at": iso(5)}
+        data["people/u_des"] = {"lastAnswerAt": iso(5)}
+        data["people/u_des/answers/g7"] = {"choice": "a", "choiceLabel": "G7 option A", "note": "", "at": iso(5)}
+        p = self.open(data)
+        folded = p.locator("#item-g7 .folded").text_content()
+        self.assertIn("Your answer: G7 option B “but keep it small”", folded)
+        self.assertIn("A collaborator: G7 option A", folded)
+        self.assertIn("Outcome: Building option B.", folded)
+        p.click("#done-summary"); p.click("#item-g7 button.fold")
+        self.assertIn("You:", self.text("#item-g7 .others"))
+        self.assertIn("G7 option B", self.text("#item-g7 .others"))
+        self.assertIn("taken in", self.text("#item-g7 .meta").lower())
+        self.assertEqual(self.errors, [])
+
     def test_long_notes_show_their_start(self):
         report = "\n".join(f"line {n}: the bot stood still at 120 64 -30" for n in range(1, 1036))
         data = seed()

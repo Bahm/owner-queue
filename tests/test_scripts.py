@@ -210,8 +210,8 @@ class QueueScript(unittest.TestCase):
         self.assertEqual(sorted(k[1] for k in w if k[0] == "items"), ["g1", "g4"])
         g1 = json.loads(Path(w[("items", "g1")]["file_path"]).read_text())
         self.assertEqual(g1["status"], "done")
-        self.assertIn("A collaborator: 16 m “go”", g1["outcome"])
-        self.assertIn("ask me tomorrow", json.loads(Path(w[("items", "g4")]["file_path"]).read_text())["outcome"])
+        self.assertIn("takenAt", g1)
+        self.assertNotIn("outcome", g1, "the page shows the answers; nothing is copied")
         self.assertIn(("receipts", "u_des"), w)
         self.assertNotIn(("people/u_des/answers", "anything-else"), w, "never cleared unpinned")
         self.assertIn("NOT cleared", r.stdout)
@@ -219,9 +219,12 @@ class QueueScript(unittest.TestCase):
         self.assertIn("Send this batch before anything else", r.stdout)
         saved = re.search(r"saved to (\S+\.md)", r.stdout).group(1)
         self.assertEqual(Path(saved).read_text().strip(), "Report: stuck twice.")
-        r = self.run_q("take-in", "t", d, "--free", "u_des=7")
+        r = self.run_q("take-in", "t", d, "--free", "u_des=7", "--outcome", "G1=Building the 16 m level.")
         clear = [x for x in self.writes(r) if x["doc_id"] == "anything-else"]
         self.assertEqual(clear[0]["if_version"], 7)
+        g1 = [x for x in self.writes(r) if x["doc_id"] == "g1"][0]
+        self.assertEqual(json.loads(Path(g1["file_path"]).read_text())["outcome"], "Building the 16 m level.")
+        self.assertNotEqual(self.run_q("take-in", "t", d, "--outcome", "G2=x", ok=False).returncode, 0, "a plan for an untaken question is refused")
         feed = [x for x in self.writes(r) if x["collection"] == "feed"][0]
         self.assertIn("Took in</b> G1, G4", json.loads(Path(feed["file_path"]).read_text())["html"])
 

@@ -41,7 +41,8 @@ A record is capped at 256 KiB. Questions stay small, and pictures go in files be
 | `lowPriority` | A "low priority" chip; never among the three most urgent |
 | `askedAt` | Not shown. Answers older than it are an earlier round: shown under Previous answers, not as current |
 | `due` | Chip, e.g. "Oct 20" |
-| `effort`, `cost`, `undo`, `unblocks`, `outcome` | Labelled rows. `cost` is the cost to build: work and tokens |
+| `effort`, `cost`, `undo`, `unblocks`, `outcome` | Labelled rows. `cost` is the cost to build: work and tokens. `outcome` is what was done about the answers |
+| `takenAt` | "Taken in" row, in the viewer's time: when `take-in` closed it. A closed question shows everyone's answers, yours included |
 | `needs`, `steps`, `prompt` | For `yours`: what you'll need; numbered steps `[{text, command?}]` with Copy buttons; a prompt to paste into the chat, with a Copy button |
 | `input` | Label of the note box (default "Note (optional)") |
 | `source` | "Source: …" line naming the file or report with the evidence |

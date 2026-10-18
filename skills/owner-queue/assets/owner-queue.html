@@ -346,13 +346,17 @@ function paintFeedFold() {
   $("feedFold").setAttribute("aria-expanded", String(!folded));
   $("feedFold").setAttribute("aria-label", (folded ? "Expand" : "Collapse") + " For information");
 }
+function clip(text, n) { return text.length > n ? text.slice(0, n - 1) + "…" : text; }
 function foldSummary(id, item) {
-  if (item.status === "done") return item.outcome ? "Outcome: " + item.outcome : "Done.";
+  if (item.status === "done") {
+    const said = currentAnswers(item, id).map(([uid, a]) => (uid === me ? "Your answer" : labelFor(uid)) + ": " + [a.choiceLabel || a.choice, String(a.note || "").trim() ? "“" + clip(String(a.note).trim(), 80) + "”" : ""].filter(Boolean).join(" "));
+    return [...said, item.outcome ? "Outcome: " + item.outcome : ""].filter(Boolean).join(" · ") || "Done.";
+  }
   if (item.status === "waiting") return "Scheduled" + (item.due ? " for " + item.due : "") + ".";
   const mine = myAnswer(id), cur = mine && isCurrent(item, mine) ? mine : null;
   const choice = cur && cur.choice ? (arr(item.choices).find((c) => c.key === cur.choice) || {}).label || cur.choiceLabel || cur.choice : "";
   const note = cur && String(cur.note || "").trim();
-  if (choice || note) return "Your answer: " + [choice, note ? "“" + (note.length > 80 ? note.slice(0, 79) + "…" : note) + "”" : ""].filter(Boolean).join(" ");
+  if (choice || note) return "Your answer: " + [choice, note ? "“" + clip(note, 80) + "”" : ""].filter(Boolean).join(" ");
   const others = currentAnswers(item, id).filter(([uid]) => uid !== me);
   return others.length ? "Answered by " + others.map(([uid]) => labelFor(uid)).join(", ") + "." : "Not answered yet.";
 }
@@ -621,7 +625,7 @@ function updateItem(id, item, rank, openCount) {
   v.pick.hidden = !item.pick || !open;
 
   v.meta.replaceChildren();
-  for (const [term, value] of [["Effort", item.effort], ["Cost to build", item.cost], ["Undo", item.undo], ["Unblocks", item.unblocks], ["Outcome", item.outcome]]) {
+  for (const [term, value] of [["Effort", item.effort], ["Cost to build", item.cost], ["Undo", item.undo], ["Unblocks", item.unblocks], ["Taken in", item.takenAt ? when(item.takenAt) : ""], ["Outcome", item.outcome]]) {
     if (!value) continue; v.meta.append(el("dt", "", term), withCode(el("dd"), value));
   }
   v.meta.hidden = !v.meta.childElementCount;
@@ -645,7 +649,7 @@ function updateItem(id, item, rank, openCount) {
 
   v.others.replaceChildren();
   for (const [uid, a] of currentAnswers(item, id)) {
-    if (uid === me) continue;
+    if (uid === me && open) continue;   // yours is in the options and note box while it's open; on a closed question, here
     const line = el("p", "answer-line"); line.append(el("span", "who", labelFor(uid) + ":"));
     if (a.choiceLabel || a.choice) line.append(el("span", "", a.choiceLabel || a.choice));
     if (String(a.note || "").trim()) line.append(said(a.note, id + "|" + uid + "|" + a.at, true));

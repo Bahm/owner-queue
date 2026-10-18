@@ -572,7 +572,8 @@ def cmd_answers(a):
 
 
 def cmd_take_in(a):
-    """The housekeeping batch, first thing after reading: close every answered question, receipts, Anything else."""
+    """The housekeeping batch, first thing after reading: close every answered question, receipts, Anything else.
+    The page shows the answers on a closed question, so they aren't copied; --outcome REF=TEXT adds what you'll do."""
     state = load_state(a.slug)
     root = Path(a.dir)
     items, people, receipts = read_dir(root, "items"), read_dir(root, "people"), read_dir(root, "receipts")
@@ -584,8 +585,8 @@ def cmd_take_in(a):
     if missing:
         die("List these with out_dir " + str(root) + " first: " + ", ".join(f"people/{u}/answers" for u in missing))
     free_versions = dict(pair.partition("=")[::2] for pair in a.free or [])
+    plans = {id_for(state, ref): text.strip() for ref, text in (pair.partition("=")[::2] for pair in a.outcome or [])}
     t = now()
-    taken_at = t.strftime("%d %b %H:%M UTC").lstrip("0")
     who = lambda uid: "The owner" if uid == owner else "A collaborator"
     out = Out(state, "take-in")
     taken, inputs, kept, unsaved = {}, [], [], []
@@ -614,14 +615,18 @@ def cmd_take_in(a):
             if decider and (decider == "owner") != (uid == owner):
                 inputs.append(f"{item.get('ref') or item_id} ({who(uid).lower()})")   # input, not a decision
                 continue
-            taken.setdefault(item_id, []).append((uid, ans.get("choiceLabel") or ans.get("choice") or "", note))
+            taken.setdefault(item_id, uid)
     refs = []
-    for item_id, rows in taken.items():
-        said = "; ".join(f"{who(uid)}: " + " ".join(x for x in (label, f"“{note[:300].rstrip()}{' …' if len(note) > 300 else ''}”" if note else "") if x)
-                         for uid, label, note in rows)
-        out.add("update", "items", item_id, {"status": "done", "outcome": f"Taken in {taken_at}. {said}", "order": int(t.timestamp()),
-                                            "priority": {"__delete__": True}, "priorityReason": {"__delete__": True}})
+    for item_id in taken:
+        data = {"status": "done", "takenAt": stamp(t), "order": int(t.timestamp()),
+                "priority": {"__delete__": True}, "priorityReason": {"__delete__": True}}
+        if plans.get(item_id):
+            data["outcome"] = plans[item_id]
+        out.add("update", "items", item_id, data)
         refs.append(items[item_id].get("ref") or item_id)
+    stray = [ref for ref in plans if ref not in taken]
+    if stray:
+        die("--outcome for questions without a current answer to take in: " + ", ".join(stray) + ". Close those with `close`.")
     read = []
     for uid in uids:
         sub, seen = (people.get(uid) or {}).get("submittedAt"), (receipts.get(uid) or {}).get("readAt")
@@ -907,7 +912,7 @@ def main():
     p = sub.add_parser("fyi"); p.add_argument("slug"); p.add_argument("html"); p.set_defaults(fn=cmd_fyi)
     p = sub.add_parser("prune"); p.add_argument("slug"); p.add_argument("ids", nargs="*"); p.set_defaults(fn=cmd_prune)
     p = sub.add_parser("answers"); p.add_argument("slug"); p.add_argument("dir"); p.set_defaults(fn=cmd_answers)
-    p = sub.add_parser("take-in"); p.add_argument("slug"); p.add_argument("dir"); p.add_argument("--free", action="append", metavar="UID=VERSION", help="clear that person's Anything else, pinned to the version the listing showed"); p.set_defaults(fn=cmd_take_in)
+    p = sub.add_parser("take-in"); p.add_argument("slug"); p.add_argument("dir"); p.add_argument("--free", action="append", metavar="UID=VERSION", help="clear that person's Anything else, pinned to the version the listing showed"); p.add_argument("--outcome", action="append", metavar="REF=TEXT", help="what you'll do about that question's answer, shown on it"); p.set_defaults(fn=cmd_take_in)
     p = sub.add_parser("receipt"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int); p.set_defaults(fn=cmd_receipt)
     p = sub.add_parser("clear-free"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int, required=True); p.set_defaults(fn=cmd_clear_free)
     p = sub.add_parser("lint"); p.add_argument("files", nargs="+"); p.set_defaults(fn=cmd_lint)
