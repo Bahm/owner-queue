@@ -234,6 +234,7 @@ class QueueScript(unittest.TestCase):
         self.assertIn("Send this batch before anything else", r.stdout)
         saved = re.search(r"saved to (\S+\.md)", r.stdout).group(1)
         self.assertEqual(Path(saved).read_text().strip(), "Report: stuck twice.")
+        self.assertEqual([x for x in self.writes(r) if x["collection"] == "feed"], [], "no Anything else cleared, no line")
         r = self.run_q("take-in", "t", d, "--free", "u_des=7", "--outcome", "G1=Building the 16 m level.", "--pins", "G1=3 G4=1 u_des=5")
         clear = [x for x in self.writes(r) if x["doc_id"] == "anything-else"]
         self.assertEqual(clear[0]["if_version"], 7)
@@ -241,8 +242,11 @@ class QueueScript(unittest.TestCase):
         self.assertEqual(json.loads(Path(g1["file_path"]).read_text())["outcome"], "Building the 16 m level.")
         self.assertNotEqual(self.run_q("take-in", "t", d, "--outcome", "G2=x", "--pins", "G1=3 G4=1 u_des=5", ok=False).returncode, 0,
                             "a plan for an untaken question is refused")
-        feed = [x for x in self.writes(r) if x["collection"] == "feed"][0]
-        self.assertIn("Took in</b> G1, G4", json.loads(Path(feed["file_path"]).read_text())["html"])
+        feed = [x for x in self.writes(r) if x["collection"] == "feed"]
+        self.assertEqual(len(feed), 1)
+        html = json.loads(Path(feed[0]["file_path"]).read_text())["html"]
+        self.assertIn("Anything else note from a collaborator", html)
+        self.assertNotIn("G1", html, "answered questions show under Done, not under For information")
 
     def test_receipt_and_clear_free(self):
         self.init()

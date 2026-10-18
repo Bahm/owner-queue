@@ -84,10 +84,11 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 ## Changes in 2.4
 
 - `queue.py take-in` is the housekeeping batch, run first when answers arrive: it closes every answered question, writes receipts, saves and clears Anything else (pinned, so nothing typed since is lost) and adds a For information line. The wake message names it as the step before acting (the owner's O11).
-- A closed question shows everyone's answers, yours included, with a "Taken in" time; `take-in --outcome REF=TEXT` puts what Claude will do in its outcome instead of copying the answer there (2.5.0, the owner's O12).
+- A closed question shows everyone's answers, yours included, with the time it was closed; `take-in --outcome REF=TEXT` puts what Claude will do in its outcome instead of copying the answer there (2.5.0, the owner's O12).
 - Only the session that owns a queue publishes it (the owner). `queue.py answers` and `status` say when a newer page is available for it (2.5.1).
 - Done lists the most recently closed question first (2.5.2; the B4B collaborator asked).
 - `take-in --pins` pins each write to the version the listing showed; the store refuses an unpinned write to an existing record (2.5.3; the roc-ui session's report).
+- Answered questions show only under Done, with one time each, when they were closed; For information is for news that isn't about a question. `take-in` writes a line there only for a cleared Anything else (2.6.0, the owner's O14).
 
 ## License
 

@@ -188,7 +188,10 @@ class PageTest(unittest.TestCase):
         p.click("#done-summary"); p.click("#item-g7 button.fold")
         self.assertIn("You:", self.text("#item-g7 .others"))
         self.assertIn("G7 option B", self.text("#item-g7 .others"))
-        self.assertIn("taken in", self.text("#item-g7 .meta").lower())
+        self.assertIn("closed", self.text("#item-g7 .meta").lower())
+        self.assertEqual(p.locator("#item-g7 .others .stamp").count(), 0, "one time per closed question, not one per answer")
+        p.click("#item-g7 button.fold")
+        self.assertEqual(p.locator("#item-g7 .folded .stamp").count(), 1)
         self.assertEqual(self.errors, [])
 
     def test_done_newest_first(self):

@@ -346,6 +346,8 @@ function paintFeedFold() {
   $("feedFold").setAttribute("aria-expanded", String(!folded));
   $("feedFold").setAttribute("aria-label", (folded ? "Expand" : "Collapse") + " For information");
 }
+// A closed question carries one time, when it was closed (the owner, 18 October: "timestamps, but not excessively").
+function closedAt(item) { return item.takenAt || (Number(item.order) > 1e9 ? new Date(Number(item.order) * 1000).toISOString() : ""); }
 function clip(text, n) { return text.length > n ? text.slice(0, n - 1) + "…" : text; }
 function foldSummary(id, item) {
   if (item.status === "done") {
@@ -581,7 +583,8 @@ function updateItem(id, item, rank, openCount) {
   v.root.classList.toggle("is-collapsed", isFold);
   v.fold.setAttribute("aria-expanded", String(!isFold));
   v.fold.setAttribute("aria-label", (isFold ? "Expand " : "Collapse ") + (item.ref || item.title || "question"));
-  v.folded.replaceChildren(); if (isFold) withCode(v.folded, foldSummary(id, item));
+  v.folded.replaceChildren();
+  if (isFold) { withCode(v.folded, foldSummary(id, item)); if (item.status === "done" && closedAt(item)) v.folded.append(el("span", "stamp", "  " + when(closedAt(item)))); }
   if (changedKey(v, "title", item.title)) { v.title.replaceChildren(); withCode(v.title, item.title || ""); }
   v.chips.replaceChildren();
   if (open && k[item.group]) v.chips.append(el("span", "chip", k[item.group]));
@@ -625,7 +628,7 @@ function updateItem(id, item, rank, openCount) {
   v.pick.hidden = !item.pick || !open;
 
   v.meta.replaceChildren();
-  for (const [term, value] of [["Effort", item.effort], ["Cost to build", item.cost], ["Undo", item.undo], ["Unblocks", item.unblocks], ["Taken in", item.takenAt ? when(item.takenAt) : ""], ["Outcome", item.outcome]]) {
+  for (const [term, value] of [["Effort", item.effort], ["Cost to build", item.cost], ["Undo", item.undo], ["Unblocks", item.unblocks], ["Closed", item.status === "done" ? when(closedAt(item)) : ""], ["Outcome", item.outcome]]) {
     if (!value) continue; v.meta.append(el("dt", "", term), withCode(el("dd"), value));
   }
   v.meta.hidden = !v.meta.childElementCount;
@@ -653,7 +656,8 @@ function updateItem(id, item, rank, openCount) {
     const line = el("p", "answer-line"); line.append(el("span", "who", labelFor(uid) + ":"));
     if (a.choiceLabel || a.choice) line.append(el("span", "", a.choiceLabel || a.choice));
     if (String(a.note || "").trim()) line.append(said(a.note, id + "|" + uid + "|" + a.at, true));
-    line.append(el("span", "stamp", when(a.at))); v.others.append(line);
+    if (open) line.append(el("span", "stamp", when(a.at)));
+    v.others.append(line);
   }
   v.others.hidden = !v.others.childElementCount;
 

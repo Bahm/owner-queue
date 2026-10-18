@@ -26,8 +26,8 @@ While a session works from a queue, the queue is where the owner reads. Status, 
 
 1. ArtifactData `list` with one `out_dir` for all of them: `items`, `people`, `receipts`, then `people/<uid>/answers` for every uid `Q answers` asks for.
 2. `Q answers <slug> <out_dir>`: current answers by person, who submitted, and what's unread. An answer older than its question's `askedAt` belongs to an earlier round and isn't listed.
-3. **Housekeeping first, before any other work, even mid-task** (the owner: answered questions leave the queue before anything else): `Q take-in <slug> <out_dir> --pins "<ref>=<version> <uid>=<version> …" [--free <uid>=<version>]`, and send its batch. The store takes a write to an existing record only pinned to its version, and the listing prints each version; without the pins it needs, `take-in` says which. It closes every answered question (the page shows the answers on it; `--outcome <ref>="what you'll do"` adds your plan), writes a receipt for each submit read, saves each "Anything else" note to a file and clears it (pinned to the version the listing showed, so nothing typed since is lost), and adds a For information line. An answer to a question `for` someone else stays open as input.
-4. Then act. Re-ask (`Q ask … --reask`) a question whose answer leaves it open, and say what you're doing under For information (`Q fyi`).
+3. **Housekeeping first, before any other work, even mid-task** (the owner: answered questions leave the queue before anything else): `Q take-in <slug> <out_dir> --pins "<ref>=<version> <uid>=<version> …" [--free <uid>=<version>]`, and send its batch. The store takes a write to an existing record only pinned to its version, and the listing prints each version; without the pins it needs, `take-in` says which. It closes every answered question (the page shows the answers on it; `--outcome <ref>="what you'll do"` adds your plan), writes a receipt for each submit read, saves each "Anything else" note to a file and clears it (pinned to the version the listing showed, so nothing typed since is lost), with one For information line saying so. An answer to a question `for` someone else stays open as input.
+4. Then act. Re-ask (`Q ask … --reask`) a question whose answer leaves it open. What you'll do about an answer goes in that question's outcome, not under For information: an answered question shows only under Done (the owner, O14).
 
 On every resume, and now and then while working, read the answers again: people answer without pressing Submit.
 
@@ -80,8 +80,8 @@ Write the item as JSON (fields in [reference.md](reference.md)) and run `Q ask <
 
 ## For information, Anything else and the status line
 
-- `Q fyi <slug> "<html>"` reports what was done. The script stamps it. The page shows 48 hours of entries. `Q prune` deletes older ones; run it at each housekeeping.
-- Clear "Anything else" once it's taken in, and say so under For information. Save a pasted report to a file before clearing it.
+- `Q fyi <slug> "<html>"` reports news that isn't about a question: a build, a report, a status change. Answered questions and what's done about them show under Done. The script stamps it. The page shows 48 hours of entries. `Q prune` deletes older ones; run it at each housekeeping.
+- Clear "Anything else" once it's taken in (`take-in` saves it, clears it and says so). Save a pasted report to a file before clearing it.
 - `Q config <slug> --lede "<b>17 October:</b> …"` sets the dated status line: what's open and what's running, in one or two sentences.
 
 ## Submit, and the unsafe flags

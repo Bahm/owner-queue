@@ -658,9 +658,10 @@ def cmd_take_in(a):
     for uid in unread:
         out.add("set", "receipts", uid, {"readAt": stamp(t)}, pins.get(uid) if uid in receipts else None)
         read.append(who(uid).lower())
-    if refs or kept:
-        parts = ([f"<b>Took in</b> {', '.join(refs)}."] if refs else []) + (["Anything else saved and cleared."] if kept else [])
-        out.add("set", "feed", "f" + t.strftime("%Y%m%dT%H%M%S%f"), {"at": stamp(t), "html": " ".join(parts)})
+    if kept:   # answered questions show under Done; only a cleared Anything else has nowhere else to say it was read (O14)
+        names = sorted({who(uid) for uid, _, _ in kept})
+        out.add("set", "feed", "f" + t.strftime("%Y%m%dT%H%M%S%f"),
+                {"at": stamp(t), "html": f"Took in the Anything else note{'s' * (len(kept) > 1)} from {' and '.join(n.lower() for n in names)}."})
     print(f"Closes {len(refs)} answered question{'s' * (len(refs) != 1)}" + (f" ({', '.join(refs)})" if refs else "") +
           (f", receipts for {', '.join(read)}" if read else "") + (f", {len(kept)} Anything else saved and cleared" if kept else "") + ".")
     for uid, keep, n in kept:
@@ -670,7 +671,8 @@ def cmd_take_in(a):
     if inputs:
         print("Answered by someone who doesn't decide them, left open as input: " + ", ".join(inputs) + ".")
     out.emit("Send this batch before anything else. Then act on the answers (queue.py answers lists them). Re-ask "
-             "(ask --reask) any question whose answer leaves it open, and turn a note asking for more into a new question.")
+             "(ask --reask) any question whose answer leaves it open, and turn a note asking for more into a new question. "
+             "What you'll do about an answer goes in its outcome (--outcome), not under For information.")
 
 
 def cmd_receipt(a):
