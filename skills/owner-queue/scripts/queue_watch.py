@@ -203,8 +203,8 @@ def main():
             state.write_text(at)
             print(f"Owner Queue {a.key}: a submit at {at} by {mark.get('by') or 'unknown'}. This is only a doorbell. In this order, "
                   f"before any other work, even mid-task: 1. re-arm this watcher; 2. check the live page (queue.py verify); "
-                  f"3. read the answers (queue.py answers) and send ONE housekeeping batch: close or re-ask every answered "
-                  f"question, a receipt for each submit read, Anything else saved and cleared, a fyi of what was taken in; "
+                  f"3. list the answers with out_dir and send the batch queue.py take-in prints (it closes every answered "
+                  f"question, writes receipts, saves and clears Anything else); "
                   f"4. only then act on the answers (SKILL.md, Reading answers).")
             return
         time.sleep(a.interval)

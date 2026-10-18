@@ -79,6 +79,11 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 
 - Each question folds to its number, title and a one-line summary (your answer, or its outcome once done); click the arrow or the title. For information folds as a whole. Expand all and Collapse all sit by the progress bar, and also open or close Done. Open questions start unfolded, done ones folded, and each viewer's folds are kept in their own browser.
 - "Previous answers" starts closed, showing how many there are, and someone else's long note (a pasted report) shows its first six lines with "Show all" (2.3.2; the B4B collaborator asked).
+- A note alone answers a question with choices (2.3.3).
+
+## Changes in 2.4
+
+- `queue.py take-in` is the housekeeping batch, run first when answers arrive: it closes every answered question with the answer as its outcome, writes receipts, saves and clears Anything else (pinned, so nothing typed since is lost) and adds a For information line. The wake message names it as the step before acting (the owner's O11).
 
 ## License
 

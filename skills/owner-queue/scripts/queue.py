@@ -571,6 +571,78 @@ def cmd_answers(a):
     print("\nAct only within each question's choices. A note asking for more than the question becomes a new question for the owner.")
 
 
+def cmd_take_in(a):
+    """The housekeeping batch, first thing after reading: close every answered question, receipts, Anything else."""
+    state = load_state(a.slug)
+    root = Path(a.dir)
+    items, people, receipts = read_dir(root, "items"), read_dir(root, "people"), read_dir(root, "receipts")
+    owner = state.get("owner")
+    uids = sorted(set(people) | {p.name for p in (root / "people").glob("u_*") if p.is_dir()})
+    if not items:
+        die(f"No items under {root}/items: list `items`, `people`, `receipts` and each `people/<uid>/answers` with out_dir {root} first.")
+    missing = [u for u in uids if not (root / "people" / u / "answers").is_dir()]
+    if missing:
+        die("List these with out_dir " + str(root) + " first: " + ", ".join(f"people/{u}/answers" for u in missing))
+    free_versions = dict(pair.partition("=")[::2] for pair in a.free or [])
+    t = now()
+    taken_at = t.strftime("%d %b %H:%M UTC").lstrip("0")
+    who = lambda uid: "The owner" if uid == owner else "A collaborator"
+    out = Out(state, "take-in")
+    taken, inputs, kept, unsaved = {}, [], [], []
+    for uid in uids:
+        for item_id, ans in sorted(read_dir(root, f"people/{uid}/answers").items()):
+            note = str(ans.get("note", "")).strip()
+            if item_id == FREE_ID:
+                if note:
+                    keep = cache_root() / state["slug"] / "anything-else" / f"{t:%Y%m%dT%H%M%S}-{uid}.md"
+                    keep.parent.mkdir(parents=True, exist_ok=True)
+                    keep.write_text(note + "\n")
+                    if uid in free_versions:   # pinned, so a note typed since the listing isn't wiped
+                        out.add("update", f"people/{uid}/answers", FREE_ID, {"note": "", "at": stamp(t)}, free_versions[uid])
+                        kept.append((uid, keep, len(note)))
+                    else:
+                        unsaved.append((uid, keep))
+                continue
+            item = items.get(item_id)
+            if not item or item.get("status") in ("done", "waiting"):
+                continue
+            if item.get("askedAt") and str(ans.get("at", "")) < str(item["askedAt"]):
+                continue
+            if not ans.get("choice") and not note:
+                continue
+            decider = item.get("for")
+            if decider and (decider == "owner") != (uid == owner):
+                inputs.append(f"{item.get('ref') or item_id} ({who(uid).lower()})")   # input, not a decision
+                continue
+            taken.setdefault(item_id, []).append((uid, ans.get("choiceLabel") or ans.get("choice") or "", note))
+    refs = []
+    for item_id, rows in taken.items():
+        said = "; ".join(f"{who(uid)}: " + " ".join(x for x in (label, f"“{note[:300].rstrip()}{' …' if len(note) > 300 else ''}”" if note else "") if x)
+                         for uid, label, note in rows)
+        out.add("update", "items", item_id, {"status": "done", "outcome": f"Taken in {taken_at}. {said}", "order": int(t.timestamp()),
+                                            "priority": {"__delete__": True}, "priorityReason": {"__delete__": True}})
+        refs.append(items[item_id].get("ref") or item_id)
+    read = []
+    for uid in uids:
+        sub, seen = (people.get(uid) or {}).get("submittedAt"), (receipts.get(uid) or {}).get("readAt")
+        if sub and not (seen and seen >= sub):
+            out.add("set", "receipts", uid, {"readAt": stamp(t)})
+            read.append(who(uid).lower())
+    if refs or kept:
+        parts = ([f"<b>Took in</b> {', '.join(refs)}."] if refs else []) + (["Anything else saved and cleared."] if kept else [])
+        out.add("set", "feed", "f" + t.strftime("%Y%m%dT%H%M%S%f"), {"at": stamp(t), "html": " ".join(parts)})
+    print(f"Closes {len(refs)} answered question{'s' * (len(refs) != 1)}" + (f" ({', '.join(refs)})" if refs else "") +
+          (f", receipts for {', '.join(read)}" if read else "") + (f", {len(kept)} Anything else saved and cleared" if kept else "") + ".")
+    for uid, keep, n in kept:
+        print(f"Anything else from {who(uid).lower()} ({n} characters) saved to {keep}.")
+    for uid, keep in unsaved:
+        print(f"Anything else from {who(uid).lower()} saved to {keep}, NOT cleared: run again with --free {uid}=<its version from the listing>.")
+    if inputs:
+        print("Answered by someone who doesn't decide them, left open as input: " + ", ".join(inputs) + ".")
+    out.emit("Send this batch before anything else. Then act on the answers (queue.py answers lists them). Re-ask "
+             "(ask --reask) any question whose answer leaves it open, and turn a note asking for more into a new question.")
+
+
 def cmd_receipt(a):
     state = load_state(a.slug)
     out = Out(state, "receipt")
@@ -835,6 +907,7 @@ def main():
     p = sub.add_parser("fyi"); p.add_argument("slug"); p.add_argument("html"); p.set_defaults(fn=cmd_fyi)
     p = sub.add_parser("prune"); p.add_argument("slug"); p.add_argument("ids", nargs="*"); p.set_defaults(fn=cmd_prune)
     p = sub.add_parser("answers"); p.add_argument("slug"); p.add_argument("dir"); p.set_defaults(fn=cmd_answers)
+    p = sub.add_parser("take-in"); p.add_argument("slug"); p.add_argument("dir"); p.add_argument("--free", action="append", metavar="UID=VERSION", help="clear that person's Anything else, pinned to the version the listing showed"); p.set_defaults(fn=cmd_take_in)
     p = sub.add_parser("receipt"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int); p.set_defaults(fn=cmd_receipt)
     p = sub.add_parser("clear-free"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int, required=True); p.set_defaults(fn=cmd_clear_free)
     p = sub.add_parser("lint"); p.add_argument("files", nargs="+"); p.set_defaults(fn=cmd_lint)

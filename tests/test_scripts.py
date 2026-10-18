@@ -189,6 +189,42 @@ class QueueScript(unittest.TestCase):
         self.assertIn("save it before clearing", out)
         self.assertIn("people/u_owner/answers", out, "it says what else to list")
 
+    def test_take_in_closes_answered_questions_first(self):
+        self.init()
+        d = self.tmp / "dump"
+        def put(path, body):
+            p = d / f"{path}.json"; p.parent.mkdir(parents=True, exist_ok=True); p.write_text(json.dumps(body))
+        put("items/g1", {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)})
+        put("items/g2", {**GOOD, "ref": "G2", "status": "open", "askedAt": iso(10)})               # answered before it was re-asked
+        put("items/g3", {**GOOD, "ref": "G3", "status": "open", "askedAt": iso(60), "for": "owner"})  # a collaborator's input only
+        put("items/g4", {**GOOD, "ref": "G4", "status": "open", "askedAt": iso(60)})               # a note alone
+        put("items/g5", {**GOOD, "ref": "G5", "status": "done", "askedAt": iso(60)})
+        put("people/u_des", {"submittedAt": iso(5)})
+        put("receipts/u_des", {"readAt": iso(50)})
+        for item in ("g1", "g2", "g3", "g5"):
+            put(f"people/u_des/answers/{item}", {"choice": "16", "choiceLabel": "16 m", "note": "go" if item == "g1" else "", "at": iso(30)})
+        put("people/u_des/answers/g4", {"choice": "", "choiceLabel": "", "note": "Neither: ask me tomorrow.", "at": iso(30)})
+        put("people/u_des/answers/anything-else", {"note": "Report: stuck twice.", "at": iso(5)})
+        r = self.run_q("take-in", "t", d)
+        w = {(x["collection"], x["doc_id"]): x for x in self.writes(r)}
+        self.assertEqual(sorted(k[1] for k in w if k[0] == "items"), ["g1", "g4"])
+        g1 = json.loads(Path(w[("items", "g1")]["file_path"]).read_text())
+        self.assertEqual(g1["status"], "done")
+        self.assertIn("A collaborator: 16 m “go”", g1["outcome"])
+        self.assertIn("ask me tomorrow", json.loads(Path(w[("items", "g4")]["file_path"]).read_text())["outcome"])
+        self.assertIn(("receipts", "u_des"), w)
+        self.assertNotIn(("people/u_des/answers", "anything-else"), w, "never cleared unpinned")
+        self.assertIn("NOT cleared", r.stdout)
+        self.assertIn("G3 (a collaborator)", r.stdout)
+        self.assertIn("Send this batch before anything else", r.stdout)
+        saved = re.search(r"saved to (\S+\.md)", r.stdout).group(1)
+        self.assertEqual(Path(saved).read_text().strip(), "Report: stuck twice.")
+        r = self.run_q("take-in", "t", d, "--free", "u_des=7")
+        clear = [x for x in self.writes(r) if x["doc_id"] == "anything-else"]
+        self.assertEqual(clear[0]["if_version"], 7)
+        feed = [x for x in self.writes(r) if x["collection"] == "feed"][0]
+        self.assertIn("Took in</b> G1, G4", json.loads(Path(feed["file_path"]).read_text())["html"])
+
     def test_receipt_and_clear_free(self):
         self.init()
         w = self.writes(self.run_q("receipt", "t", "u_des"))[0]

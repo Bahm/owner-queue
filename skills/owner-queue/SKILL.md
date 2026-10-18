@@ -26,12 +26,8 @@ While a session works from a queue, the queue is where the owner reads. Status, 
 
 1. ArtifactData `list` with one `out_dir` for all of them: `items`, `people`, `receipts`, then `people/<uid>/answers` for every uid `Q answers` asks for.
 2. `Q answers <slug> <out_dir>`: current answers by person, who submitted, and what's unread. An answer older than its question's `askedAt` belongs to an earlier round and isn't listed.
-3. **Housekeeping first, in one batch, before acting** (the owner: answered questions leave the queue before anything else):
-   - every answered question closed (`Q close … --outcome`) or re-asked (`Q ask … --reask`);
-   - `Q receipt <slug> <uid>` for each submit read, so its sender sees "Claude read your answers";
-   - an "Anything else" note saved to a file first (`Q answers` gives its path), then `Q clear-free`;
-   - a `Q fyi` saying what was taken in.
-4. Then act.
+3. **Housekeeping first, before any other work, even mid-task** (the owner: answered questions leave the queue before anything else): `Q take-in <slug> <out_dir> [--free <uid>=<version>]`, and send its batch. It closes every answered question (the answer becomes its outcome), writes a receipt for each submit read, saves each "Anything else" note to a file and clears it (pinned to the version the listing showed, so nothing typed since is lost), and adds a For information line. An answer to a question `for` someone else stays open as input.
+4. Then act. Re-ask (`Q ask … --reask`) a question whose answer leaves it open, and say what you're doing under For information (`Q fyi`). To put a plan in a question's outcome instead, close it yourself (`Q close … --outcome`) before `take-in`.
 
 On every resume, and now and then while working, read the answers again: people answer without pressing Submit.
 
