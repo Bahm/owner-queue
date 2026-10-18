@@ -152,8 +152,32 @@ class PageTest(unittest.TestCase):
         data["people/u_owner/answers/g1"] = {"choice": "b", "choiceLabel": "G1 option B", "note": "too vague", "at": iso(90)}
         p = self.open(data)
         self.assertEqual(p.get_attribute("#item-g1 button.opt[data-key='b']", "aria-checked"), "false")
-        self.assertIn("previous answers", self.text("#item-g1 .history").lower())
+        self.assertIn("previous answers (1)", self.text("#item-g1 .history").lower())
+        self.assertFalse(p.evaluate("document.querySelector('#item-g1 details.history').open"), "Previous answers starts closed")
+        p.click("#item-g1 details.history > summary")
         self.assertIn("too vague", self.text("#item-g1 .history"))
+
+    def test_long_notes_show_their_start(self):
+        report = "\n".join(f"line {n}: the bot stood still at 120 64 -30" for n in range(1, 1036))
+        data = seed()
+        data["people/u_des"] = {"lastAnswerAt": iso(2)}
+        data["people/u_des/answers/g1"] = {"choice": "a", "choiceLabel": "G1 option A", "note": report, "at": iso(90)}
+        data["people/u_des/answers/g2"] = {"choice": "a", "choiceLabel": "G2 option A", "note": report, "at": iso(2)}
+        data["people/u_des/answers/anything-else"] = {"note": report, "at": iso(2)}
+        p = self.open(data)
+        p.click("#item-g1 details.history > summary")
+        prev = self.text("#item-g1 .history")
+        self.assertIn("line 6:", prev)
+        self.assertNotIn("line 7:", prev)
+        self.assertIn("Show all (1,035 lines)", prev)
+        p.locator("#item-g1 .history button.link").click()
+        self.assertIn("line 1035:", self.text("#item-g1 .history"))
+        self.assertIn("Show less", self.text("#item-g1 .history"))
+        self.assertNotIn("line 7:", self.text("#item-g2 .others"))
+        self.assertNotIn("line 7:", self.text("#others-anything-else"))
+        extra = p.evaluate("document.getElementById('item-g2').offsetHeight - document.getElementById('item-g3').offsetHeight")
+        self.assertLess(extra, 250, "the other person's long note adds a few lines, not a thousand")
+        self.assertEqual(self.errors, [])
 
     def test_others_answers_and_anything_else(self):
         data = seed()

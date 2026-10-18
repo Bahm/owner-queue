@@ -78,6 +78,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 ## Changes in 2.3
 
 - Each question folds to its number, title and a one-line summary (your answer, or its outcome once done); click the arrow or the title. For information folds as a whole. Expand all and Collapse all sit by the progress bar, and also open or close Done. Open questions start unfolded, done ones folded, and each viewer's folds are kept in their own browser.
+- "Previous answers" starts closed, showing how many there are, and someone else's long note (a pasted report) shows its first six lines with "Show all" (2.3.2; the B4B collaborator asked).
 
 ## License
 

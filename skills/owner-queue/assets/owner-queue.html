@@ -116,6 +116,9 @@ textarea.has-text { border-color: var(--accent); }
 .answer-line { display: flex; flex-wrap: wrap; gap: .15rem .6rem; align-items: baseline; }
 .answer-line .who { font-weight: 600; }
 .answer-line .said { white-space: pre-wrap; overflow-wrap: anywhere; }
+.answer-line .said button.link { margin-left: .3rem; white-space: nowrap; }
+details.history > summary { cursor: pointer; font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+details.history[open] > summary { margin-bottom: .2rem; }
 .stamp { font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .source { font-family: var(--font-mono); font-size: .76rem; color: var(--muted); overflow-wrap: anywhere; }
 a.qref { font-weight: 600; text-decoration-style: dotted; text-underline-offset: .15em; }
@@ -305,6 +308,25 @@ async function refreshNames() {
 }
 
 // ---- answers ---------------------------------------------------------------
+// ---- long notes ----------------------------------------------------------------------
+// Someone else's note (a pasted run report can be a thousand lines) shows its first lines and a "Show all" link.
+const NOTE_LINES = 6, NOTE_CHARS = 500;
+const shownInFull = new Set();      // keys of notes this viewer opened in full
+function said(text, key, quote) {
+  const full = String(text ?? "").trim(), lines = full.split("\n").length;
+  const span = el("span", "said"), q = (t) => quote ? "“" + t + "”" : t;
+  const long = lines > NOTE_LINES || full.length > NOTE_CHARS;
+  if (!long) { span.textContent = q(full); return span; }
+  const open = shownInFull.has(key);
+  let cut = full.split("\n").slice(0, NOTE_LINES).join("\n"); if (cut.length > NOTE_CHARS) cut = cut.slice(0, NOTE_CHARS);
+  span.textContent = open ? q(full) : q(cut.trimEnd() + " …");
+  const b = el("button", "link", open ? "Show less" : "Show all (" + lines.toLocaleString() + (lines === 1 ? " line, " + full.length.toLocaleString() + " characters)" : " lines)"));
+  b.type = "button"; b.setAttribute("aria-expanded", String(open));
+  b.addEventListener("click", () => { if (open) shownInFull.delete(key); else shownInFull.add(key); render(); });
+  span.append(b);
+  return span;
+}
+
 // ---- folding ---------------------------------------------------------------------
 // Each question folds to its head and a one-line summary; For information folds as a whole. What a viewer folded is
 // kept in their own browser only. Open questions start unfolded, done ones folded.
@@ -518,7 +540,7 @@ function itemView(id) {
   clear.type = "button"; boxLabel.append(noteText, clear);
   const note = el("textarea"); note.id = "note-" + id; note.rows = 2; boxLabel.htmlFor = note.id;
   const saved = el("div", "saved"); saved.id = "saved-" + id;
-  const others = el("div", "others"), history = el("div", "history"), source = el("p", "source"), refby = el("p", "refby");
+  const others = el("div", "others"), history = el("details", "history"), source = el("p", "source"), refby = el("p", "refby");
   root.append(head, folded, priority, ask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, note, saved, others, history, source);
   v = { root, fold, folded, ref, title, chips, priority, ask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, noteText, clear, note, saved, others, history, source, keys: {} };
   const toggle = () => setFolds({ [id]: !isFolded(id, items.get(id)) });
@@ -625,22 +647,21 @@ function updateItem(id, item, rank, openCount) {
     if (uid === me) continue;
     const line = el("p", "answer-line"); line.append(el("span", "who", labelFor(uid) + ":"));
     if (a.choiceLabel || a.choice) line.append(el("span", "", a.choiceLabel || a.choice));
-    if (String(a.note || "").trim()) line.append(el("span", "said", "“" + a.note.trim() + "”"));
+    if (String(a.note || "").trim()) line.append(said(a.note, id + "|" + uid + "|" + a.at, true));
     line.append(el("span", "stamp", when(a.at))); v.others.append(line);
   }
   v.others.hidden = !v.others.childElementCount;
 
-  v.history.replaceChildren();
   const hist = arr(item.history).slice();
   for (const [uid, map] of answers) { const a = map.get(id); if (a && !isCurrent(item, a) && (a.choice || a.note) && !hist.some((h) => h.at === a.at)) hist.push({ who: uid === me ? "You" : labelFor(uid), choiceLabel: a.choiceLabel || a.choice, note: a.note, at: a.at }); }
   hist.sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
-  if (hist.length) v.history.append(el("span", "label", "Previous answers"));
-  for (const h of hist) {
+  v.history.replaceChildren(el("summary", "", "Previous answers (" + hist.length + ")"));
+  for (const [i, h] of hist.entries()) {
     const line = el("p", "answer-line");
     if (h.at) line.append(el("span", "stamp", when(h.at)));
     if (h.who) line.append(el("span", "who", h.who + ":"));
     if (h.choiceLabel) line.append(el("span", "", h.choiceLabel));
-    if (String(h.note || "").trim()) line.append(el("span", "said", "“" + String(h.note).trim() + "”"));
+    if (String(h.note || "").trim()) line.append(said(h.note, id + "|prev|" + (h.at || i), true));
     v.history.append(line);
   }
   v.history.hidden = !hist.length;
@@ -768,7 +789,7 @@ function renderFree() {
   for (const [uid, map] of answers) {
     if (uid === me) continue; const a = map.get(FREE_ID);
     if (!a || !String(a.note || "").trim()) continue;
-    const line = el("p", "answer-line"); line.append(el("span", "who", labelFor(uid) + ":"), el("span", "said", a.note.trim()), el("span", "stamp", when(a.at))); box.append(line);
+    const line = el("p", "answer-line"); line.append(el("span", "who", labelFor(uid) + ":"), said(a.note, FREE_ID + "|" + uid + "|" + a.at, false), el("span", "stamp", when(a.at))); box.append(line);
   }
   box.hidden = !box.childElementCount;
 }
