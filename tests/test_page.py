@@ -157,6 +157,22 @@ class PageTest(unittest.TestCase):
         p.click("#item-g1 details.history > summary")
         self.assertIn("too vague", self.text("#item-g1 .history"))
 
+    def test_a_note_alone_is_an_answer(self):
+        data = seed()
+        data["people/u_owner"] = {"lastAnswerAt": iso(2)}
+        data["people/u_owner/answers/g2"] = {"choice": "", "choiceLabel": "", "note": "Neither: do it by hand.", "at": iso(2)}
+        data["people/u_des"] = {"lastAnswerAt": iso(2)}
+        data["people/u_des/answers/g3"] = {"choice": "", "choiceLabel": "", "note": "Ask me tomorrow.", "at": iso(2)}
+        p = self.open(data)
+        self.assertIn("is-answered", p.get_attribute("#item-g2", "class"))
+        self.assertIn("is-answered", p.get_attribute("#item-g3", "class"))
+        self.assertIn("Ask me tomorrow.", self.text("#item-g3 .others"))
+        self.assertIn("2 of 5 answered", self.text("#plabel"))
+        p.fill("#note-g1", "Only a note.")
+        p.wait_for_timeout(1000)
+        self.assertIn("is-answered", p.get_attribute("#item-g1", "class"))
+        self.assertEqual(self.errors, [])
+
     def test_long_notes_show_their_start(self):
         report = "\n".join(f"line {n}: the bot stood still at 120 64 -30" for n in range(1, 1036))
         data = seed()

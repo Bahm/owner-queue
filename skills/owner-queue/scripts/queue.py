@@ -563,8 +563,10 @@ def cmd_answers(a):
             current = not item.get("askedAt") or str(ans.get("at", "")) >= str(item["askedAt"])
             if not current or item.get("status") == "done":
                 continue
-            label = ans.get("choiceLabel") or ans.get("choice") or "(no choice)"
+            label = ans.get("choiceLabel") or ans.get("choice") or "(no choice, a note)"
             note = str(ans.get("note", "")).strip()
+            if not ans.get("choice") and not note:
+                continue   # cleared
             print(f"- {item.get('ref') or item_id} {strip_tags(item.get('title'))}: {label}" + (f"\n    note: {note[:1500]}" if note else ""))
     print("\nAct only within each question's choices. A note asking for more than the question becomes a new question for the owner.")
 

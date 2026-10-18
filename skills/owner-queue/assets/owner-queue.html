@@ -435,7 +435,8 @@ document.addEventListener("click", (event) => {
 });
 
 function isCurrent(item, answer) { return Boolean(answer) && (!item || !item.askedAt || String(answer.at || "") >= String(item.askedAt)); }
-function hasContent(item, a) { if (!a) return false; const choices = arr(item && item.choices); return Boolean(a.choice || (!choices.length && String(a.note || "").trim())); }
+// An answer is a pick, a note, or both: a note alone answers a question with choices too (the owner, 18 October).
+function hasContent(item, a) { return Boolean(a && (a.choice || String(a.note || "").trim())); }
 function answerOf(uid, id) { return (answers.get(uid) || new Map()).get(id) || null; }
 function myAnswer(id) { const d = drafts.get(id); const s = me ? answerOf(me, id) : null; if (d && (!s || String(d.at) > String(s.at || ""))) return d; return s; }
 function currentAnswers(item, id) {
