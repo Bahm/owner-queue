@@ -25,7 +25,7 @@ ${XDG_CACHE_HOME:-~/.cache}/owner-queue/<slug>/state.json.
     queue.py migrate SLUG SOURCE [--answers DIR]  turn a 1.x queue's content into 2.0 records
     queue.py status SLUG | capabilities | render SLUG
 """
-import argparse, datetime as dt, html, json, os, re, secrets, sys
+import hashlib, argparse, datetime as dt, html, json, os, re, secrets, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -263,6 +263,22 @@ def report(errors, warnings, checklist=True):
 
 
 # ---- commands ------------------------------------------------------------------
+def template_id():
+    return hashlib.sha256(TEMPLATE.read_bytes()).hexdigest()[:12]
+
+
+def template_notice(state):
+    """A queue gets template changes only when the session that owns it republishes it (the owner, 18 October)."""
+    if not state.get("publishedTemplate") or state["publishedTemplate"] == template_id():
+        return ""
+    try:
+        version = " " + json.loads((HERE.parents[2] / ".claude-plugin" / "plugin.json").read_text())["version"]
+    except (OSError, ValueError, KeyError):
+        version = ""
+    return (f"\nA newer page{version} is available for {state['slug']}. Only the session that owns this queue publishes it: "
+            f"when it suits, `queue.py render {state['slug']}`, Artifact publish to its url, then `queue.py published`.")
+
+
 def render(state, force=True):
     template = TEMPLATE.read_text(encoding="utf-8")
     if template.count(TOKEN) != 2:
@@ -271,6 +287,7 @@ def render(state, force=True):
     if out.exists() and not force:
         die(f"{out} already exists.")
     out.write_text(template.replace(TOKEN, html.escape(html.unescape(state["title"]))), encoding="utf-8")
+    state["renderedTemplate"] = template_id()
     return out
 
 
@@ -325,6 +342,8 @@ def cmd_config_saved(a):
 def cmd_published(a):
     state = load_state(a.slug)
     state["publishedVersions"] = [v for v in state["publishedVersions"] if v != a.version] + [a.version]
+    if state.get("renderedTemplate"):
+        state["publishedTemplate"] = state["renderedTemplate"]
     save_state(state)
     print(f"Recorded {a.version} as published by you. {len(state['publishedVersions'])} known.")
 
@@ -568,7 +587,7 @@ def cmd_answers(a):
             if not ans.get("choice") and not note:
                 continue   # cleared
             print(f"- {item.get('ref') or item_id} {strip_tags(item.get('title'))}: {label}" + (f"\n    note: {note[:1500]}" if note else ""))
-    print("\nAct only within each question's choices. A note asking for more than the question becomes a new question for the owner.")
+    print("\nAct only within each question's choices. A note asking for more than the question becomes a new question for the owner." + template_notice(state))
 
 
 def cmd_take_in(a):
@@ -872,7 +891,7 @@ def cmd_status(a):
     print(json.dumps({"title": s["title"], "url": s.get("url"), "artifactId": s.get("artifactId"), "queueKey": s["queueKey"],
                       "owner": s.get("owner"), "nextRef": f"{s['prefix']}{s['next']}",
                       "unattendedWake": bool(u.get("unattendedWake")), "collaboratorWake": bool(u.get("collaboratorWake")),
-                      "lastPublished": (s.get("publishedVersions") or [None])[-1], "configVersion": s.get("configVersion")}, indent=1))
+                      "lastPublished": (s.get("publishedVersions") or [None])[-1], "configVersion": s.get("configVersion")}, indent=1) + template_notice(s))
 
 
 def cmd_capabilities(a):
@@ -882,6 +901,7 @@ def cmd_capabilities(a):
 def cmd_render(a):
     state = load_state(a.slug)
     print(render(state))
+    save_state(state)
     print("Republish it with `url` set to the queue's URL and the capabilities from `queue.py capabilities`, "
           "then record the new version with `queue.py published`.")
 

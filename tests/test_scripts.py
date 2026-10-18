@@ -189,6 +189,17 @@ class QueueScript(unittest.TestCase):
         self.assertIn("save it before clearing", out)
         self.assertIn("people/u_owner/answers", out, "it says what else to list")
 
+    def test_a_newer_page_is_announced_to_the_queues_owner(self):
+        self.init()
+        self.run_q("render", "t")
+        self.run_q("published", "t", "v1")
+        self.assertNotIn("newer page", self.run_q("status", "t").stdout)
+        state = self.tmp / "owner-queue" / "t" / "state.json"
+        s = json.loads(state.read_text()); s["publishedTemplate"] = "000000000000"; state.write_text(json.dumps(s))
+        out = self.run_q("status", "t").stdout
+        self.assertIn("newer page", out)
+        self.assertIn("Only the session that owns this queue publishes it", out)
+
     def test_take_in_closes_answered_questions_first(self):
         self.init()
         d = self.tmp / "dump"

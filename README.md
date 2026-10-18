@@ -85,6 +85,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 
 - `queue.py take-in` is the housekeeping batch, run first when answers arrive: it closes every answered question, writes receipts, saves and clears Anything else (pinned, so nothing typed since is lost) and adds a For information line. The wake message names it as the step before acting (the owner's O11).
 - A closed question shows everyone's answers, yours included, with a "Taken in" time; `take-in --outcome REF=TEXT` puts what Claude will do in its outcome instead of copying the answer there (2.5.0, the owner's O12).
+- Only the session that owns a queue publishes it (the owner). `queue.py answers` and `status` say when a newer page is available for it (2.5.1).
 
 ## License
 

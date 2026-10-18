@@ -102,7 +102,7 @@ Never set up a scheduled model check to watch a queue: the owner ruled that out.
 
 ## Changing the page
 
-Template edits reach a queue only when it's republished: `Q render <slug>`, then Artifact publish with the queue's `url` and `capabilities` from `Q capabilities`. **After every publish, `Q published <slug> <version id>`**, or the next wake check stops. Republish only for code changes; content changes are store writes. For a panel such as a playable build or downloads, see "Panels" in [reference.md](reference.md).
+**Only the session that owns a queue publishes it** (the owner, 18 October). A session that changes the template, such as one working on this skill, publishes its own queue and leaves the others to their owners; `Q answers` and `Q status` tell an owner when a newer page is available. To republish your own: `Q render <slug>`, then Artifact publish with the queue's `url` and `capabilities` from `Q capabilities`. **Right after each publish, `Q published <slug> <version id>`**, or the next wake check stops. Republish only for code changes; content changes are store writes. For a panel such as a playable build or downloads, see "Panels" in [reference.md](reference.md).
 
 ## `migrate <queue URL>`
 
