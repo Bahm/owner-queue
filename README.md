@@ -89,6 +89,8 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - Done lists the most recently closed question first (2.5.2; the B4B collaborator asked).
 - `take-in --pins` pins each write to the version the listing showed; the store refuses an unpinned write to an existing record (2.5.3; the roc-ui session's report).
 - Answered questions show only under Done, with one time each, when they were closed; For information is for news that isn't about a question. `take-in` writes a line there only for a cleared Anything else (2.6.0, the owner's O14).
+- For information stays, for news only. `take-in` writes nothing there; the receipt reads "Claude took in your answers on <date, time>" (2.6.1, the owner's O15).
+- Every time on the page is the viewer's own: an ISO time (`2026-10-18T02:52Z`) or `<time datetime>` in any text is shown in each viewer's zone, and lint warns on "UTC" (2.7.0).
 
 ## License
 

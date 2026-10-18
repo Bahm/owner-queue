@@ -7,7 +7,7 @@
 | `config/page` | Claude (owner only) | Page settings, applied live |
 | `items/<id>` | Claude (owner only) | One question each |
 | `feed/<id>` | Claude (owner only) | One For information entry each: `{at, html}` |
-| `receipts/<uid>` | Claude (owner only) | `{readAt}`: when Claude read that person's submit |
+| `receipts/<uid>` | Claude (owner only) | `{readAt}`: when Claude took in that person's answers; the page tells them "Claude took in your answers on …" |
 | `people/<uid>` | that person only | `{submittedAt, lastAnswerAt}` |
 | `people/<uid>/answers/<item id>` | that person only | `{choice, choiceLabel, note, at}` |
 | `people/<uid>/answers/anything-else` | that person only | `{note, at}`: the Anything else box |
@@ -94,9 +94,13 @@ Answers save as typed: choices at once, notes 0.8 s after the last keystroke, on
 
 The page links every question number it finds in a question's text, notes, For information, the status line and panels: `G51` on a queue with a prefix; `q224`, `#224` or `question 224` on one without. Only numbers of questions in the store link, and never inside `code`, `pre`, links or buttons. A click scrolls to the question, opening Done if it's there. Each question shows "Referenced by": the questions and For information entries (last 48 hours) that name it. Put what the reader needs inside the question anyway; a link is a jump, and `Q ask` warns when a context is mostly a pointer.
 
+## Times
+
+The page shows every time in the viewer's zone. In any text (questions, notes, the status line, panels), write a time as an ISO time, `2026-10-18T02:52Z`, or as `<time datetime="2026-10-18T02:52Z">…</time>`; the page replaces it with the viewer's local time and shows the full date and zone on hover. Times inside `code` stay as written. Lint warns on "UTC".
+
 ## HTML allowlist
 
-`context`, `lede`, feed `html` and panel `html` keep: `p`, `ul`, `ol`, `li`, `b`, `strong`, `i`, `em`, `u`, `s`, `code`, `pre`, `kbd`, `blockquote`, `q`, `a`, `img`, `figure`, `figcaption`, `table` (scrolls sideways when wide) and its parts, `dl`/`dt`/`dd`, `h3`–`h5`, `hr`, `br`, `span`, `div`, `small`, `sub`, `sup`, `mark`, `abbr`, `button` (with the `data-` attributes above), and inline SVG shapes and text.
+`context`, `lede`, feed `html` and panel `html` keep: `time` (with `datetime`), `p`, `ul`, `ol`, `li`, `b`, `strong`, `i`, `em`, `u`, `s`, `code`, `pre`, `kbd`, `blockquote`, `q`, `a`, `img`, `figure`, `figcaption`, `table` (scrolls sideways when wide) and its parts, `dl`/`dt`/`dd`, `h3`–`h5`, `hr`, `br`, `span`, `div`, `small`, `sub`, `sup`, `mark`, `abbr`, `button` (with the `data-` attributes above), and inline SVG shapes and text.
 
 Everything else is stripped: scripts, event handlers, frames, forms and styles that load URLs. Links open in a new tab and must be `https:`, `mailto:` or relative. Pictures must be relative, `https:`, or (refused by lint) `data:image`.
 

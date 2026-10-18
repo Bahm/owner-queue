@@ -65,7 +65,7 @@ class PageTest(unittest.TestCase):
         cls.pw.stop()
 
     def open(self, data=None, cfg=None, width=1000):
-        self.ctx = self.browser.new_context(viewport={"width": width, "height": 900})
+        self.ctx = self.browser.new_context(viewport={"width": width, "height": 900}, timezone_id=getattr(self, "ctx_tz", "UTC"))
         boot = ("if (window === window.top && !sessionStorage.getItem('__mockdb')) {"
                 f"sessionStorage.setItem('__mockdb', {json.dumps(json.dumps(data if data is not None else seed()))});"
                 f"sessionStorage.setItem('__mockcfg', {json.dumps(json.dumps(cfg or {}))}); }}")
@@ -203,6 +203,22 @@ class PageTest(unittest.TestCase):
         self.assertEqual(refs[:2], ["G8", "G9"])
         self.assertEqual(refs[-1], "G7", "a question without a close time goes last")
 
+    def test_times_show_in_the_viewers_zone(self):
+        data = seed()
+        data["items/g1"]["context"] = "<p>Submitted 2026-10-18T02:52Z, built <time datetime=\"2026-10-18T03:10:00Z\">soon</time>; <code>2026-10-18T02:52Z</code> stays.</p>"
+        data["items/g1"]["pick"] = "Since 2026-10-18T02:52:00.000Z."
+        self.ctx_tz = "Asia/Bangkok"
+        p = self.open(data)
+        times = p.locator("#item-g1 .context time").all_text_contents()
+        self.assertEqual(len(times), 2)
+        self.assertTrue(all("09:52" in t or "9:52" in t or "10:10" in t for t in times), times)
+        shown = p.locator("#item-g1 .context").first.inner_text()
+        self.assertIn("Submitted Oct 18, 09:52 AM", shown)
+        self.assertNotIn("02:52Z,", shown)
+        self.assertIn("2026-10-18T02:52Z", p.locator("#item-g1 .context code").inner_text(), "code is left as written")
+        self.assertIn("9:52", self.text("#item-g1 .pick"))
+        self.assertEqual(self.errors, [])
+
     def test_long_notes_show_their_start(self):
         report = "\n".join(f"line {n}: the bot stood still at 120 64 -30" for n in range(1, 1036))
         data = seed()
@@ -256,7 +272,7 @@ class PageTest(unittest.TestCase):
         data["people/u_owner"] = {"submittedAt": iso(10)}
         data["receipts/u_owner"] = {"readAt": iso(5)}
         p = self.open(data)
-        self.assertIn("Claude read your answers", self.text("#submitLine"))
+        self.assertIn("Claude took in your answers on", self.text("#submitLine"))
 
     def test_unattended_wake_mirrors_owner_submits_only(self):
         data = seed()

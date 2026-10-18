@@ -19,7 +19,7 @@ ${XDG_CACHE_HOME:-~/.cache}/owner-queue/<slug>/state.json.
     queue.py fyi SLUG HTML|@FILE                  a "For information" entry, stamped now
     queue.py prune SLUG [ID=VERSION ...]          no ids: print the query for old entries; ids: delete them
     queue.py answers SLUG DIR                     summarise answers saved with ArtifactData out_dir under DIR
-    queue.py receipt SLUG UID [--version N]       "Claude read your answers"
+    queue.py receipt SLUG UID [--version N]       "Claude took in your answers on …"
     queue.py clear-free SLUG UID --version N      empty someone's "Anything else" once taken in
     queue.py lint FILE...                         check questions or feed entries against the rules
     queue.py migrate SLUG SOURCE [--answers DIR]  turn a 1.x queue's content into 2.0 records
@@ -145,7 +145,15 @@ BAD_HTML = [
 ]
 
 
+def lint_times(where, text, warnings):
+    """The page shows every time in the viewer's zone, but only times it can read: ISO times or <time datetime>."""
+    if re.search(r"\b(UTC|GMT)\b|(?<![T\d])\d{1,2}:\d{2}\s*Z\b", strip_tags(text)):
+        warnings.append(f"{where}: a time written for one zone (UTC). Write it as an ISO time, e.g. {stamp()[:16]}Z "
+                        f"(or <time datetime=\"…\">), and each viewer sees it in their own zone (the owner, 18 October).")
+
+
 def lint_html(where, text, errors, warnings):
+    lint_times(where, text, warnings)
     if re.search(r"data:[a-z]+/[a-z0-9.+-]+;base64,", str(text), re.I):
         errors.append(f"{where}: a picture or file pasted in as a data: URI. Publish it as a file beside the page "
                       f"(Artifact publish `files`) and refer to it by its relative path.")
@@ -226,6 +234,10 @@ def lint_item(item, state=None):
     for field in HTML_FIELDS:
         if field in item:
             lint_html(f"{ref}.{field}", item[field], errors, warnings)
+    plain = [item.get(f) for f in ("title", "ask", "pick", "priorityReason", "outcome", "cost", "effort", "undo", "unblocks", "needs")]
+    plain += [s.get("text") for s in item.get("steps") or []]
+    plain += [x for c in choices for x in (c.get("label"), c.get("cost"), *(c.get("pros") or []), *(c.get("cons") or []))]
+    lint_times(ref, " ".join(str(x) for x in plain if x), warnings)
     for c in choices:
         for field in ("label", "cost"):
             if re.search(r"data:[a-z]+/", str(c.get(field, "")), re.I):
@@ -658,10 +670,8 @@ def cmd_take_in(a):
     for uid in unread:
         out.add("set", "receipts", uid, {"readAt": stamp(t)}, pins.get(uid) if uid in receipts else None)
         read.append(who(uid).lower())
-    if kept:   # answered questions show under Done; only a cleared Anything else has nowhere else to say it was read (O14)
-        names = sorted({who(uid) for uid, _, _ in kept})
-        out.add("set", "feed", "f" + t.strftime("%Y%m%dT%H%M%S%f"),
-                {"at": stamp(t), "html": f"Took in the Anything else note{'s' * (len(kept) > 1)} from {' and '.join(n.lower() for n in names)}."})
+    # No For information line: answered questions show under Done, and the receipt tells each sender
+    # "Claude took in your answers on <time>" (the owner, O14 and O15).
     print(f"Closes {len(refs)} answered question{'s' * (len(refs) != 1)}" + (f" ({', '.join(refs)})" if refs else "") +
           (f", receipts for {', '.join(read)}" if read else "") + (f", {len(kept)} Anything else saved and cleared" if kept else "") + ".")
     for uid, keep, n in kept:

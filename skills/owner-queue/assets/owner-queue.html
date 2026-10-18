@@ -246,9 +246,9 @@ function withCode(target, text) {
 
 // Claude's HTML (question context, the status line, For information, panels) passes an allowlist: no scripts,
 // no event handlers, no frames, no forms, links and pictures only from safe addresses.
-const TAGS = new Set("a abbr b blockquote br caption code dd del div dl dt em figcaption figure h3 h4 h5 hr i img kbd li mark ol p pre q s small span strong sub sup table tbody td tfoot th thead tr u ul button svg g defs title desc polygon polyline line rect circle ellipse path text tspan marker".split(" "));
+const TAGS = new Set("a abbr time b blockquote br caption code dd del div dl dt em figcaption figure h3 h4 h5 hr i img kbd li mark ol p pre q s small span strong sub sup table tbody td tfoot th thead tr u ul button svg g defs title desc polygon polyline line rect circle ellipse path text tspan marker".split(" "));
 const DROP = new Set("script style iframe frame frameset object embed form input textarea select option template link meta base noscript foreignobject animate set audio video source track canvas dialog".split(" "));
-const ATTRS = new Set("href title alt src width height colspan rowspan scope start class role aria-label aria-hidden lang dir viewbox xmlns fill stroke stroke-width stroke-linejoin stroke-linecap stroke-dasharray opacity fill-opacity stroke-opacity points x y x1 y1 x2 y2 cx cy r rx ry d transform font-size font-weight text-anchor dominant-baseline marker-end marker-start refx refy markerwidth markerheight orient preserveaspectratio style type data-save data-save-zip data-files data-play".split(" "));
+const ATTRS = new Set("href title datetime alt src width height colspan rowspan scope start class role aria-label aria-hidden lang dir viewbox xmlns fill stroke stroke-width stroke-linejoin stroke-linecap stroke-dasharray opacity fill-opacity stroke-opacity points x y x1 y1 x2 y2 cx cy r rx ry d transform font-size font-weight text-anchor dominant-baseline marker-end marker-start refx refy markerwidth markerheight orient preserveaspectratio style type data-save data-save-zip data-files data-play".split(" "));
 function safeUrl(value, forImage) {
   const v = String(value || "").trim();
   if (!v) return null;
@@ -361,6 +361,39 @@ function foldSummary(id, item) {
   if (choice || note) return "Your answer: " + [choice, note ? "“" + clip(note, 80) + "”" : ""].filter(Boolean).join(" ");
   const others = currentAnswers(item, id).filter(([uid]) => uid !== me);
   return others.length ? "Answered by " + others.map(([uid]) => labelFor(uid)).join(", ") + "." : "Not answered yet.";
+}
+
+// ---- times in the viewer's zone ----------------------------------------------------
+// Every time the page shows is the viewer's local time (the owner, 18 October: "no UTC"). A time Claude writes in
+// text is an ISO time (2026-10-18T02:52Z) or <time datetime="…">; here it becomes the viewer's time, the full
+// date and zone on hover.
+const ISO_TIME = /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?Z\b/g;
+const TIME_SKIP = new Set(["code", "pre", "kbd", "textarea", "script", "style", "time"]);
+const longFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyle: "long" });
+function timeEl(iso, node) {
+  const t = node || document.createElement("time"); const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return t;
+  t.dateTime = iso; t.textContent = when(iso); t.title = longFmt.format(new Date(ms)); t.dataset.local = "1";
+  return t;
+}
+function localTimes(root) {
+  if (!root) return;
+  for (const t of root.querySelectorAll("time[datetime]:not([data-local])")) timeEl(t.getAttribute("datetime"), t);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode(n) {
+    for (let p = n.parentElement; p && p !== root.parentElement; p = p.parentElement) if (TIME_SKIP.has(p.localName)) return NodeFilter.FILTER_REJECT;
+    return NodeFilter.FILTER_ACCEPT;
+  } });
+  const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    const text = node.nodeValue; if (!text.includes("T") || !text.includes("Z")) continue;
+    const re = new RegExp(ISO_TIME.source, "g"); let m, last = 0, out = null;
+    while ((m = re.exec(text))) {
+      out = out || document.createDocumentFragment();
+      if (m.index > last) out.append(text.slice(last, m.index));
+      out.append(timeEl(m[0])); last = m.index + m[0].length;
+    }
+    if (out) { if (last < text.length) out.append(text.slice(last)); node.replaceWith(out); }
+  }
 }
 
 // ---- links between questions ------------------------------------------------
@@ -679,7 +712,7 @@ function updateItem(id, item, rank, openCount) {
   const rb = refBy.get(id) || [];
   if (changedKey(v, "refby", rb)) { v.refby.replaceChildren(); if (rb.length) v.refby.append(el("span", "label", "Referenced by"), ...rb.map((r) => refLink(r.label, r))); }
   v.refby.hidden = !rb.length;
-  linkRefs(v.root, id);
+  linkRefs(v.root, id); localTimes(v.root);
   return v.root;
 }
 
@@ -753,7 +786,7 @@ function render() {
   if (!open.length) sectionViews.get("open").list.replaceChildren(el("p", "blurb", "Nothing is open right now. New questions appear here as they're added."));
   renderPanels();
   renderFree(); renderFeed(); paintFeedFold(); renderTally(open); renderSubmit(); renderBulk(open);
-  for (const node of [$("lede"), $("feed-list"), $("others-anything-else"), sectionViews.get("panels").list]) linkRefs(node);
+  for (const node of [$("lede"), $("feed-list"), $("others-anything-else"), sectionViews.get("panels").list]) { linkRefs(node); localTimes(node); }
 }
 
 function renderTally(open) {
@@ -832,7 +865,7 @@ function renderSubmit() {
   b.textContent = submitting ? "Submitting…" : mine && pendingSubmit(me) ? "Submit again" : "Submit answers";
   const line = $("submitLine"); line.replaceChildren();
   if (mine && mine.submittedAt) {
-    if (r && String(r.readAt || "") >= String(mine.submittedAt)) line.append(el("span", "", "Claude read your answers on " + when(r.readAt) + "."));
+    if (r && String(r.readAt || "") >= String(mine.submittedAt)) line.append(el("span", "", "Claude took in your answers on " + when(r.readAt) + "."));
     else {
       let how;
       if (wakes(me)) how = "Claude is woken within seconds while this queue is open in Claude Desktop on the owner's laptop.";
