@@ -107,6 +107,16 @@ class QueueScript(unittest.TestCase):
         r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G2", "status": "open"}))
         self.assertNotIn("this edit (no --reask)", r.stdout, "a new question may carry its status")
 
+    def test_lint_knows_every_field_the_page_reads(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("queue_script", QUEUE)
+        queue = importlib.util.module_from_spec(spec); spec.loader.exec_module(queue)
+        script = (QUEUE.parent.parent / "assets" / "owner-queue.html").read_text().split("<script>", 1)[1]
+        for name, known, pattern in (("question", queue.ITEM_FIELDS, r"\b(?:item|it)\.([A-Za-z]+)\b"),
+                                     ("option", queue.CHOICE_FIELDS, r"\bc\.([A-Za-z]+)\b")):
+            with self.subTest(name):
+                self.assertEqual(sorted(set(re.findall(pattern, script)) - known), [], "the page reads a field lint would call unread")
+
     def test_reask_clears_what_closing_wrote(self):
         self.init()
         def item_body(result):
@@ -184,6 +194,22 @@ class QueueScript(unittest.TestCase):
             self.assertEqual(result.stdout.count(f"/16: `{field}` must be a list of sentences"), len(unlisted) // 2, result.stdout + result.stderr)
         unset = {**GOOD, "choices": [{**GOOD["choices"][0], "pros": None, "cons": None}, GOOD["choices"][1]]}
         self.assertNotIn("must be a list of sentences", self.run_q("lint", self.item_file(unset)).stdout)
+        shapes = [self.item_file({**GOOD, "choices": "16 m or 8 m"}), self.item_file({**GOOD, "history": ["asked before"]}),
+                  self.item_file({**GOOD, "group": "yours", "choices": [], "steps": "Run the check"})]
+        result = self.run_q("lint", *shapes, ok=False)
+        self.assertNotIn("Traceback", result.stderr, "a list written as text is refused, never a crash")
+        for field in ("choices", "history", "steps"):
+            self.assertIn(f"`{field}` must be a list of objects", result.stdout, field)
+        self.assertNotIn("doesn't read", self.run_q("lint", self.item_file(GOOD)).stdout)
+        misnamed = {**{k: v for k, v in GOOD.items() if k != "choices"}, "options": GOOD["choices"],
+                    "detail": "<p>Why.</p>"}
+        result = self.run_q("lint", self.item_file(misnamed), ok=False)
+        self.assertIn("the page doesn't read `options`, so it won't show; did you mean `choices`?", result.stdout)
+        self.assertIn("the page doesn't read `detail`, so it won't show; did you mean `context`?", result.stdout)
+        inside = {**GOOD, "choices": [{**GOOD["choices"][0], "id": "x", "detial": "?"}, GOOD["choices"][1]]}
+        result = self.run_q("lint", self.item_file(inside))
+        self.assertIn("/16: the page doesn't read `id`, so it won't show; did you mean `key`?", result.stdout)
+        self.assertIn("/16: the page doesn't read `detial`, so it won't show.", result.stdout)
         yours = {"title": "Plug in the phone", "ask": "Plug it in?", "group": "yours", "priority": 2,
                  "priorityReason": "x", "steps": [{"text": "Run", "command": "./phone.sh"}]}
         r = self.run_q("lint", self.item_file(yours))

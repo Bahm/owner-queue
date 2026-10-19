@@ -247,7 +247,9 @@ function arr(v) { return Array.isArray(v) ? v : []; }
 function nowIso() { return new Date().toISOString(); }
 function setStatus(text, error) { $("status").textContent = text || ""; $("status").classList.toggle("is-error", Boolean(error)); }
 const fmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-function when(iso) { const t = Date.parse(iso); return Number.isFinite(t) ? fmt.format(new Date(t)) : ""; }
+// Date.parse is only sure of three decimals; Python's isoformat() writes six (the owner's O21).
+function msOf(iso) { return Date.parse(String(iso ?? "").replace(/(\.\d{3})\d+(?=Z$)/, "$1")); }
+function when(iso) { const t = msOf(iso); return Number.isFinite(t) ? fmt.format(new Date(t)) : ""; }
 function store(key, value) { try { if (value === undefined) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(value)); } catch (e) {} }
 function load(key) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
 
@@ -394,11 +396,11 @@ function foldSummary(id, item) {
 // Every time the page shows is the viewer's local time (the owner, 18 October: "no UTC"). A time Claude writes in
 // text is an ISO time (2026-10-18T02:52Z) or <time datetime="…">; here it becomes the viewer's time, the full
 // date and zone on hover.
-const ISO_TIME = /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?Z\b/g;
+const ISO_TIME = /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?Z\b/g;   // up to microseconds, as Python writes them
 const TIME_SKIP = new Set(["code", "pre", "kbd", "textarea", "script", "style", "time"]);
 const longFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyle: "long" });
 function timeEl(iso, node) {
-  const t = node || document.createElement("time"); const ms = Date.parse(iso);
+  const t = node || document.createElement("time"); const ms = msOf(iso);
   if (!Number.isFinite(ms)) return t;
   t.dateTime = iso; t.textContent = when(iso); t.title = longFmt.format(new Date(ms)); t.dataset.local = "1";
   return t;

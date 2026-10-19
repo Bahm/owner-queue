@@ -215,6 +215,7 @@ class PageTest(unittest.TestCase):
         data = seed()
         data["items/g1"]["context"] = "<p>Submitted 2026-10-18T02:52Z, built <time datetime=\"2026-10-18T03:10:00Z\">soon</time>; <code>2026-10-18T02:52Z</code> stays.</p>"
         data["items/g1"]["pick"] = "Since 2026-10-18T02:52:00.000Z."
+        data["items/g1"]["priorityReason"] = "Waiting since 2026-10-18T02:52:00.123456Z."
         self.ctx_tz = "Asia/Bangkok"
         p = self.open(data)
         times = p.locator("#item-g1 .context time").all_text_contents()
@@ -225,6 +226,7 @@ class PageTest(unittest.TestCase):
         self.assertNotIn("02:52Z,", shown)
         self.assertIn("2026-10-18T02:52Z", p.locator("#item-g1 .context code").inner_text(), "code is left as written")
         self.assertIn("9:52", self.text("#item-g1 .pick"))
+        self.assertIn("Waiting since Oct 18, 09:52 AM", self.text("#item-g1 .priority"), "six decimals, as Python writes them")
         self.assertEqual(self.errors, [])
 
     def test_input_on_the_owners_question_shows_as_read(self):

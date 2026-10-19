@@ -25,7 +25,7 @@ ${XDG_CACHE_HOME:-~/.cache}/owner-queue/<slug>/state.json.
     queue.py migrate SLUG SOURCE [--answers DIR]  turn a 1.x queue's content into 2.0 records
     queue.py status SLUG | capabilities | render SLUG
 """
-import hashlib, argparse, datetime as dt, html, json, os, re, secrets, sys
+import hashlib, argparse, datetime as dt, html, json, os, re, secrets, sys, difflib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -81,7 +81,7 @@ def choice_label(item, ans):
     key = ans.get("choice") or ""
     if not key:
         return ""
-    return next((strip_tags(c.get("label") or key) for c in item.get("choices") or [] if c.get("key") == key), None)
+    return next((strip_tags(c.get("label") or key) for c in records(item.get("choices")) if c.get("key") == key), None)
 
 
 def parse_time(s):
@@ -125,6 +125,30 @@ def strip_tags(s):
 
 def listed(value):
     return value if isinstance(value, list) else []
+
+
+def records(value):
+    """The objects in a list field, the way the page's arr() and its readers see them."""
+    return [x for x in listed(value) if isinstance(x, dict)]
+
+
+# The fields the page reads (a test keeps these in step with the page), and the misnamings seen so far.
+ITEM_FIELDS = {"ref", "id", "title", "ask", "context", "status", "group", "for", "choices", "secondOpinion", "pick", "priority",
+               "priorityReason", "lowPriority", "askedAt", "due", "effort", "cost", "undo", "unblocks", "outcome", "read",
+               "takenAt", "order", "needs", "steps", "prompt", "input", "source", "history"}
+CHOICE_FIELDS = {"key", "label", "primary", "pros", "cons", "cost"}
+STEP_FIELDS = {"text", "command"}
+LIST_FIELDS = {"choices": '{"key": "a", "label": "…"}', "steps": '{"text": "…"}', "history": '{"who": "…", "note": "…", "at": "…"}'}
+MISNAMED = {"options": "choices", "detail": "context", "details": "context", "description": "context", "question": "ask",
+            "reason": "priorityReason", "id": "key", "text": "label", "pro": "pros", "con": "cons"}
+
+
+def unread_fields(where, record, known, warnings):
+    """A field the page doesn't read never shows, and nothing says so (the B4B session's B305, the owner's O21)."""
+    for field in record:
+        if field not in known:
+            near = MISNAMED.get(field) if MISNAMED.get(field) in known else next(iter(difflib.get_close_matches(field, known, 1, 0.7)), None)
+            warnings.append(f"{where}: the page doesn't read `{field}`, so it won't show" + (f"; did you mean `{near}`?" if near else "."))
 
 
 class Out:
@@ -196,7 +220,17 @@ def lint_item(item, state=None):
         errors.append(f"{ref}: status must be open, waiting or done.")
     if not str(item.get("title", "")).strip():
         errors.append(f"{ref}: no title.")
-    choices = item.get("choices") or []
+    for field, example in LIST_FIELDS.items():
+        value = item.get(field)
+        if value is not None and not (isinstance(value, list) and all(isinstance(x, dict) for x in value)):
+            errors.append(f"{ref}: `{field}` must be a list of objects, such as [{example}]: the page shows nothing else.")
+    unread_fields(ref, item, ITEM_FIELDS, warnings)
+    choices = records(item.get("choices"))
+    steps = records(item.get("steps"))
+    for c in choices:
+        unread_fields(f"{ref}/{c.get('key')}", c, CHOICE_FIELDS, warnings)
+    for s in steps:
+        unread_fields(f"{ref} step", s, STEP_FIELDS, warnings)
     if status == "open":
         if not str(item.get("ask", "")).strip():
             errors.append(f"{ref}: no `ask`. Start with what it asks, in plain words.")
@@ -252,9 +286,9 @@ def lint_item(item, state=None):
     if so and (not isinstance(so, dict) or so.get("choice") not in keys):
         errors.append(f"{ref}: `secondOpinion` must be {{choice: <a choice key>, label}}.")
     if item.get("group") == "yours" and status == "open":
-        if not item.get("steps") and not item.get("prompt"):
+        if not steps and not item.get("prompt"):
             errors.append(f"{ref}: something only you can do needs `steps` or a `prompt` to paste.")
-        for s in item.get("steps") or []:
+        for s in steps:
             cmd = str(s.get("command", ""))
             if re.search(r"(^|\s)(\./|\.\./)", cmd) or re.match(r"\s*(bash|python3?|node)\s+[A-Za-z0-9_-]+/", cmd):
                 warnings.append(f"{ref}: a step's command uses a relative path. Give the whole path from ~, or start with `cd ~/...`.")
@@ -271,7 +305,7 @@ def lint_item(item, state=None):
         if field in item:
             lint_html(f"{ref}.{field}", item[field], errors, warnings)
     plain = [item.get(f) for f in ("title", "ask", "pick", "priorityReason", "outcome", "cost", "effort", "undo", "unblocks", "needs")]
-    plain += [s.get("text") for s in item.get("steps") or []]
+    plain += [s.get("text") for s in steps]
     plain += [text for choice in choices for text in (choice.get("label"), choice.get("cost"), *listed(choice.get("pros")), *listed(choice.get("cons")))]
     lint_times(ref, " ".join(str(x) for x in plain if x), warnings)
     for c in choices:

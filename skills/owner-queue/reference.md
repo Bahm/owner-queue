@@ -99,7 +99,9 @@ The page links every question number it finds in a question's text, notes, For i
 
 ## Times
 
-The page shows every time in the viewer's zone. In any text (questions, notes, the status line, panels), write a time as an ISO time, `2026-10-18T02:52Z`, or as `<time datetime="2026-10-18T02:52Z">…</time>`; the page replaces it with the viewer's local time and shows the full date and zone on hover. Times inside `code` stay as written. Lint warns on "UTC".
+The page shows every time in the viewer's zone. In any text (questions, notes, the status line, panels), write a time as an ISO time, `2026-10-18T02:52Z`, or as `<time datetime="2026-10-18T02:52Z">…</time>`. Seconds and up to six decimals are fine (`2026-10-18T02:52:00.123456Z`, as Python writes them). The page replaces it with the viewer's local time and shows the full date and zone on hover. Times inside `code` stay as written. Lint warns on "UTC".
+
+Lint also warns on a field name the page doesn't read (it would never show), naming the field it probably meant, e.g. `options` for `choices`. It refuses `choices`, `steps` or `history` that aren't lists of objects, which the page would show as nothing. The lists of fields it knows are in `queue.py` (`ITEM_FIELDS`, `CHOICE_FIELDS`, `STEP_FIELDS`), and a test keeps them in step with the page.
 
 ## HTML allowlist
 
