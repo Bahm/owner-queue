@@ -488,6 +488,10 @@ def cmd_ask(a):
         state.setdefault("ids", {})[str(item["ref"]).lower()] = doc_id   # ask, close and wait find it by its ref
     if new or a.reask:
         item["askedAt"] = stamp()
+    if a.reask and not new:
+        item.setdefault("status", "open")
+        if item["status"] != "done":
+            item["takenAt"] = {"__delete__": True}
     errors, warnings = lint_item(item, state)
     if not report(errors, warnings):
         die("Not written: fix the errors above.")
