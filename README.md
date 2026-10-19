@@ -92,6 +92,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - For information stays, for news only. `take-in` writes nothing there; the receipt reads "Claude took in your answers on <date, time>" (2.6.1, the owner's O15).
 - Every time on the page is the viewer's own: an ISO time (`2026-10-18T02:52Z`) or `<time datetime>` in any text is shown in each viewer's zone, and lint warns on "UTC" (2.7.0).
 - A collaborator's note on a question someone else decides shows as read once `take-in` has read it, with an optional reply under it (`take-in --reply REF=TEXT`; 2.8.0, the owner's O16).
+- Security (2.8.1, a reviewer's finding): only a real time and user id pass from the store to a session. The page mirrors and the watcher accepts and prints only those, and `queue.py answers` and `take-in` use the question's own labels and quote notes as their words. A submit time, a label or an answer id written to steer the session never reaches it.
 
 ## License
 

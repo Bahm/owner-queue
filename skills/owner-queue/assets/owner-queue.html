@@ -875,7 +875,19 @@ const feedKeys = { keys: {} };
 // ---- Submit ----------------------------------------------------------------
 function unsafe() { return isObj(config.unsafe) ? config.unsafe : {}; }
 function wakes(uid) { const u = unsafe(); return Boolean(u.unattendedWake) && (uid === config.owner || (uid === me && isOwner) || Boolean(u.collaboratorWake)); }
-function pendingSubmit(uid) { const p = people.get(uid); if (!p || !p.submittedAt) return null; const r = receipts.get(uid); return r && String(r.readAt || "") >= String(p.submittedAt) ? null : p.submittedAt; }
+// A submit's time is written by the person who submitted, so it could be any text. Only a real time, not in the
+// future, counts as a submit, and only that time and a real user id reach the mark the watcher reads.
+const ISO_STRICT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$/;
+function realTime(value) {
+  if (typeof value !== "string" || !ISO_STRICT.test(value)) return null;
+  const ms = Date.parse(value); if (!Number.isFinite(ms) || ms > Date.now() + 10 * 60e3) return null;
+  return new Date(ms).toISOString();
+}
+function realUid(value) { return typeof value === "string" && /^u_[A-Za-z0-9_-]{1,64}$/.test(value) ? value : null; }
+function pendingSubmit(uid) {
+  const p = people.get(uid); const at = p && realTime(p.submittedAt); if (!at) return null;
+  const r = receipts.get(uid); return r && String(r.readAt || "") >= at ? null : at;
+}
 function renderSubmit() {
   const b = $("submitBtn"); b.disabled = !db || !me || readOnly || submitting;
   const mine = me && people.get(me); const r = me && receipts.get(me);
@@ -922,7 +934,7 @@ async function submitAnswers() {
 function mirror() {
   const u = unsafe(); if (!u.unattendedWake || !isOwner || !config.queueKey) return;
   let best = null;
-  for (const [uid] of people) { const at = pendingSubmit(uid); if (at && wakes(uid) && (!best || at > best.at)) best = { at, by: uid }; }
+  for (const [uid] of people) { const at = pendingSubmit(uid); if (at && realUid(uid) && wakes(uid) && (!best || at > best.at)) best = { at, by: uid }; }
   const key = "owner-queue:" + config.queueKey + ":submitted";
   const prev = load(key);
   const next = best ? { ready: true, at: best.at, by: best.by } : { ready: false, at: (prev && prev.at) || null };

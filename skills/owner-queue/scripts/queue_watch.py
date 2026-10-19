@@ -14,7 +14,7 @@ A wake is only a doorbell: the session still re-reads the store and checks the l
     queue_watch.py --key QUEUE_KEY --artifact-id ID --dump      what the queue's page has written, then exit
     queue_watch.py --list                                       every page with owner-queue keys, then exit
 """
-import argparse, json, re, struct, sys, time
+import argparse, datetime as dt, json, re, struct, sys, time
 from pathlib import Path
 
 CANDIDATES = [
@@ -140,6 +140,45 @@ def rows():
             continue   # a file being rewritten: the next pass reads it
 
 
+# What a submit mark may hold. Its values come from the store, where each person writes their own record, so
+# anything else could be text written to steer the session that reads this script's output (prompt injection).
+# Only a real time and a real user id are accepted, and they're printed re-formatted, never as written.
+ISO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z")
+UID = re.compile(r"u_[A-Za-z0-9_-]{1,64}")
+SKEW = dt.timedelta(minutes=10)
+
+
+def clean_time(value):
+    """The time as `2026-10-18T02:52:17.058Z`, or None unless it's a real UTC time no later than now (plus clock skew)."""
+    if not isinstance(value, str) or not ISO.fullmatch(value):
+        return None
+    try:
+        t = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if t > dt.datetime.now(dt.timezone.utc) + SKEW:
+        return None
+    return t.strftime("%Y-%m-%dT%H:%M:%S.") + f"{t.microsecond // 1000:03d}Z"
+
+
+def clean_uid(value):
+    return value if isinstance(value, str) and UID.fullmatch(value) else None
+
+
+def submit_of(text):
+    """(time, user id or None) of a valid submit mark, or None."""
+    try:
+        mark = json.loads(text) if text else None
+    except ValueError:
+        return None
+    if not isinstance(mark, dict) or mark.get("ready") is not True:
+        return None
+    at, by = clean_time(mark.get("at")), mark.get("by")
+    if at is None or (by is not None and clean_uid(by) is None):
+        return None
+    return at, clean_uid(by)
+
+
 def origin_of(artifact_id):
     if not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", artifact_id or ""):
         sys.exit("--artifact-id must be the artifact's id, as `Artifact read` prints it: 8-4-4-4-12 hex digits.")
@@ -175,8 +214,10 @@ def main():
     if a.list:
         seen = {}
         for seq, org, name, val in rows():
-            if name.startswith(PREFIX):
-                seen.setdefault(org, set()).add(name)
+            if name.startswith(PREFIX):   # another page's key names are its own text: print only well-formed ones
+                ok = re.fullmatch(r"https://[0-9a-f-]{36}\.frame\.claudeusercontent\.com/\^0https://claude\.ai", org) and \
+                    re.fullmatch(rf"{PREFIX}[A-Za-z0-9_.-]{{4,80}}:[a-z]{{1,20}}", name)
+                seen.setdefault(org if ok else "(a page with other characters in its keys)", set()).add(name if ok else "…")
         for org, names in sorted(seen.items()):
             print(org, " ".join(sorted(names)))
         return
@@ -186,22 +227,20 @@ def main():
     key_prefix = f"{PREFIX}{a.key}:"
     if a.dump:
         for name, (seq, text) in sorted(read_keys(key_prefix, origin).items()):
-            print(seq, name, (text or "")[:160])
+            submit = submit_of(text) if name == key_prefix + "submitted" else None
+            print(seq, name, f"submit at {submit[0]} by {submit[1] or 'unknown'}" if submit else "(no valid submit mark)")
         return
     state = Path(a.state or Path.home() / ".cache" / "owner-queue" / "wake" / f"{a.key}.handled")
     state.parent.mkdir(parents=True, exist_ok=True)
-    handled = state.read_text().strip() if state.exists() else ""
+    handled = clean_time(state.read_text().strip()) if state.exists() else None
     want = key_prefix + "submitted"
     while True:
         seq, text = read_keys(key_prefix, origin).get(want, (0, None))
-        try:
-            mark = json.loads(text) if text else {}
-        except ValueError:
-            mark = {}
-        at = mark.get("at") if isinstance(mark, dict) else None
-        if isinstance(mark, dict) and mark.get("ready") and isinstance(at, str) and at != handled:
+        submit = submit_of(text)   # anything but a real time and user id is ignored, and never printed
+        if submit and submit[0] != handled:
+            at, by = submit
             state.write_text(at)
-            print(f"Owner Queue {a.key}: a submit at {at} by {mark.get('by') or 'unknown'}. This is only a doorbell. In this order, "
+            print(f"Owner Queue {a.key}: a submit at {at} by {by or 'unknown'}. This is only a doorbell. In this order, "
                   f"before any other work, even mid-task: 1. re-arm this watcher; 2. check the live page (queue.py verify); "
                   f"3. list the answers with out_dir and send the batch queue.py take-in prints (it closes every answered "
                   f"question, writes receipts, saves and clears Anything else); "
