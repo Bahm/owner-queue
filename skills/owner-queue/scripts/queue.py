@@ -169,7 +169,7 @@ BAD_HTML = [
 
 def lint_times(where, text, warnings):
     """The page shows every time in the viewer's zone, but only times it can read: ISO times or <time datetime>."""
-    if re.search(r"\b(UTC|GMT)\b|(?<![T\d])\d{1,2}:\d{2}\s*Z\b", strip_tags(text)):
+    if re.search(r"\b(UTC|GMT)\b|(?<![T\d:])\d{1,2}:\d{2}\s*Z\b", strip_tags(text)):
         warnings.append(f"{where}: a time written for one zone (UTC). Write it as an ISO time, e.g. {stamp()[:16]}Z "
                         f"(or <time datetime=\"…\">), and each viewer sees it in their own zone (the owner, 18 October).")
 
@@ -213,6 +213,12 @@ def lint_item(item, state=None):
         errors.append(f"{ref}: every choice needs a unique `key`.")
     if any(not str(c.get("label", "")).strip() for c in choices):
         errors.append(f"{ref}: every choice needs a `label`.")
+    for choice in choices:
+        for field in ("pros", "cons"):
+            sentences = choice.get(field, [])
+            if not (isinstance(sentences, list) and all(isinstance(sentence, str) for sentence in sentences)):
+                errors.append(f"{ref}/{choice.get('key')}: `{field}` must be a list of sentences, such as [\"Fewer steps.\"]; "
+                              "the page shows nothing else.")
     decision = len(choices) >= 2 and item.get("group") != "yours"
     if decision and status == "open":
         primaries = sum(1 for c in choices if c.get("primary"))
