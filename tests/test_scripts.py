@@ -94,6 +94,19 @@ class QueueScript(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("priority", result.stdout + result.stderr)
 
+    def test_a_plain_edit_with_a_status_warns(self):
+        self.init()
+        self.run_q("ask", "t", self.item_file(GOOD))
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "status": "open"}), "--version", "4")
+        self.assertIn('G1: this edit (no --reask) sends status "open"', r.stdout)
+        self.assertIn("--reask", r.stdout)
+        self.assertEqual(json.loads(Path(self.writes(r)[0]["file_path"]).read_text())["status"], "open", "a warning, not a refusal")
+        for args in (["--version", "5"], ["--version", "6", "--reask"]):
+            r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", **({"status": "open"} if "--reask" in args else {})}), *args)
+            self.assertNotIn("this edit (no --reask)", r.stdout, args)
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G2", "status": "open"}))
+        self.assertNotIn("this edit (no --reask)", r.stdout, "a new question may carry its status")
+
     def test_reask_clears_what_closing_wrote(self):
         self.init()
         def item_body(result):

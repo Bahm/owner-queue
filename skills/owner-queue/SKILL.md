@@ -65,7 +65,7 @@ Once the owner approves, the change goes where it belongs:
 
 ## Writing a question
 
-Write the item as JSON (fields in [reference.md](reference.md)) and run `Q ask <slug> item.json`. It lints and refuses errors. A new question gets the next number, written into the file, so running `ask` on it again before sending keeps that number; to change a question already sent, add `--version` with its store version. It also prints the checks only you can make. Make them every time; a wrong or vague line costs the owner a round trip and their trust in the rest.
+Write the item as JSON (fields in [reference.md](reference.md)) and run `Q ask <slug> item.json`. It lints and refuses errors. A new question gets the next number, written into the file, so running `ask` on it again before sending keeps that number; to change a question already sent, add `--version` with its store version, and leave `status` out of the file: `--reask` asks it again, and `close` and `wait` change its status. It also prints the checks only you can make. Make them every time; a wrong or vague line costs the owner a round trip and their trust in the rest.
 
 - **Concise.** Only what the reader needs to decide. Context goes inside the question it informs (`context`), never in a "read first" block.
 - **`ask` starts with what it asks, in plain words, in one short sentence.** One decision per question.

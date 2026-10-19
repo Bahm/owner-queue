@@ -31,7 +31,7 @@ A record is capped at 256 KiB. Questions stay small, and pictures go in files be
 | `ref`, `title` | Heading. `Q ask` numbers `ref` with the queue's prefix; the id is `ref` in lower case |
 | `ask` | The question, in plain words. Hidden when it repeats the title |
 | `context` | HTML (allowlist below): what the reader needs to decide, inside the question |
-| `status` | `open`: on the queue. `waiting`: Scheduled. `done`: Done, collapsed. `Q ask --reask` sets `open` unless the item file sets a status, and removes what closing wrote: `takenAt`, `order`, and `outcome` and `undo` unless the file sets them |
+| `status` | `open`: on the queue. `waiting`: Scheduled. `done`: Done, collapsed. `Q ask --reask` sets `open` unless the item file sets a status, and removes what closing wrote: `takenAt`, `order`, and `outcome` and `undo` unless the file sets them. A plain edit (`--version` without `--reask`) whose file carries a status gets a warning, since it sends that status as it is |
 | `group` | Kind chip: `go`, `domain`, `yours`, `review`, `house`, or a `config.kinds` key. `yours` goes under "Needs you, in person" |
 | `for` | Who decides it: `"owner"` or `"collaborator"` (anyone else it's shared with). Shows "For you" to them and "For the owner" or "For collaborators" to others; counts in "Needs you" only for them |
 | `choices` | `[{key, label, primary?, pros?, cons?, cost?}]`. Exactly one `primary` (Recommended). `pros`/`cons` are short sentences. Omit for a note-only question |

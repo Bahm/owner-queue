@@ -96,6 +96,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - Anything else stays at the bottom of the screen while you read the questions, as a box to type in; at its own place it shows all of it (2.9.0, the owner).
 - A question number inside an option's pros and cons links too, and Claude's own `#item-…` links stay in the tab. A closed question keeps what was asked, its context and its options (read-only), and drops its note box; nothing the page hides shows any more, such as "Previous answers (0)" (2.9.1, the owner).
 - Re-asking a closed question puts it back on the queue: `queue.py ask --reask` writes `status: "open"` (unless the item file sets a status) and removes what closing wrote, `takenAt` and `order`, and `outcome` and `undo` unless the file sets them. Before, it stayed under Done, read-only, so nobody could answer the new round (2.9.2, a bug report and a reviewer's finding).
+- `queue.py ask --version N` without `--reask` warns when the item file carries a status: it would send it as it is, and an "open" on a closed question puts it back with its old outcome (2.9.3, xbahm's finding; the owner's O19).
 
 ## License
 

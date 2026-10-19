@@ -495,6 +495,12 @@ def cmd_ask(a):
             for field in CLOSED_FIELDS:
                 item.setdefault(field, {"__delete__": True})
     errors, warnings = lint_item(item, state)
+    if not new and not a.reask and "status" in item:
+        # A plain edit merges the file's status as it is: "open" on a closed question puts it back with its old
+        # outcome, nobody having asked it again (xbahm's finding; the owner's O19).
+        warnings.append(f"{item.get('ref') or doc_id}: this edit (no --reask) sends status \"{item['status']}\" as it is: on a "
+                        "closed question, \"open\" puts it back with its old outcome. To ask again, use --reask; to close or "
+                        "schedule it, use close or wait; otherwise take status out of the file.")
     if not report(errors, warnings):
         die("Not written: fix the errors above.")
     save_state(state)
