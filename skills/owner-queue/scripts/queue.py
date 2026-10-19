@@ -123,6 +123,10 @@ def strip_tags(s):
     return html.unescape(re.sub(r"<[^>]+>", "", str(s or ""))).strip()
 
 
+def listed(value):
+    return value if isinstance(value, list) else []
+
+
 class Out:
     """Collects store writes as files and prints them as ArtifactData batch `writes`, 50 at a time."""
 
@@ -169,7 +173,7 @@ BAD_HTML = [
 
 def lint_times(where, text, warnings):
     """The page shows every time in the viewer's zone, but only times it can read: ISO times or <time datetime>."""
-    if re.search(r"\b(UTC|GMT)\b|(?<![T\d:])\d{1,2}:\d{2}\s*Z\b", strip_tags(text)):
+    if re.search(r"\b(UTC|GMT)\b|(?<![T\d])(?<!\d:)\d{1,2}:\d{2}(?::\d{2})?\s*Z\b", strip_tags(text)):
         warnings.append(f"{where}: a time written for one zone (UTC). Write it as an ISO time, e.g. {stamp()[:16]}Z "
                         f"(or <time datetime=\"…\">), and each viewer sees it in their own zone (the owner, 18 October).")
 
@@ -215,10 +219,10 @@ def lint_item(item, state=None):
         errors.append(f"{ref}: every choice needs a `label`.")
     for choice in choices:
         for field in ("pros", "cons"):
-            sentences = choice.get(field, [])
-            if not (isinstance(sentences, list) and all(isinstance(sentence, str) for sentence in sentences)):
-                errors.append(f"{ref}/{choice.get('key')}: `{field}` must be a list of sentences, such as [\"Fewer steps.\"]; "
-                              "the page shows nothing else.")
+            sentences = choice.get(field)
+            if sentences is not None and not (isinstance(sentences, list) and all(isinstance(sentence, str) and sentence.strip() for sentence in sentences)):
+                errors.append(f"{ref}/{choice.get('key')}: `{field}` must be a list of sentences, such as [\"Fewer steps.\"], none of them empty: "
+                              "the page shows nothing for a value that isn't a list, and a blank bullet for an empty sentence.")
     decision = len(choices) >= 2 and item.get("group") != "yours"
     if decision and status == "open":
         primaries = sum(1 for c in choices if c.get("primary"))
@@ -268,7 +272,7 @@ def lint_item(item, state=None):
             lint_html(f"{ref}.{field}", item[field], errors, warnings)
     plain = [item.get(f) for f in ("title", "ask", "pick", "priorityReason", "outcome", "cost", "effort", "undo", "unblocks", "needs")]
     plain += [s.get("text") for s in item.get("steps") or []]
-    plain += [x for c in choices for x in (c.get("label"), c.get("cost"), *(c.get("pros") or []), *(c.get("cons") or []))]
+    plain += [text for choice in choices for text in (choice.get("label"), choice.get("cost"), *listed(choice.get("pros")), *listed(choice.get("cons")))]
     lint_times(ref, " ".join(str(x) for x in plain if x), warnings)
     for c in choices:
         for field in ("label", "cost"):

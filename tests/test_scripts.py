@@ -176,11 +176,14 @@ class QueueScript(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0, len(choices))
             self.assertIn("needs at least two `choices`", result.stdout, "a decision without options is refused")
         self.assertNotIn("two `choices`", self.run_q("lint", self.item_file({**bare, "status": "waiting"})).stdout)
-        for status in ("open", "done"):
-            item = {**GOOD, "status": status, "choices": [{**GOOD["choices"][0], "cons": "Steeper."}, GOOD["choices"][1]]}
-            result = self.run_q("lint", self.item_file(item), ok=False)
-            self.assertNotEqual(result.returncode, 0, status)
-            self.assertIn("/16: `cons` must be a list of sentences", result.stdout, status)
+        unlisted = [self.item_file({**GOOD, "status": status, "choices": [{**GOOD["choices"][0], field: value}, GOOD["choices"][1]]})
+                    for field in ("pros", "cons") for value in ("Steeper.", 5, True, [1], [""], ["  "]) for status in ("open", "done")]
+        result = self.run_q("lint", *unlisted, ok=False)
+        self.assertNotEqual(result.returncode, 0)
+        for field in ("pros", "cons"):
+            self.assertEqual(result.stdout.count(f"/16: `{field}` must be a list of sentences"), len(unlisted) // 2, result.stdout + result.stderr)
+        unset = {**GOOD, "choices": [{**GOOD["choices"][0], "pros": None, "cons": None}, GOOD["choices"][1]]}
+        self.assertNotIn("must be a list of sentences", self.run_q("lint", self.item_file(unset)).stdout)
         yours = {"title": "Plug in the phone", "ask": "Plug it in?", "group": "yours", "priority": 2,
                  "priorityReason": "x", "steps": [{"text": "Run", "command": "./phone.sh"}]}
         r = self.run_q("lint", self.item_file(yours))
@@ -191,6 +194,10 @@ class QueueScript(unittest.TestCase):
         self.assertNotIn("one zone", self.run_q("lint", self.item_file({**GOOD, "ask": "Submitted 2026-10-18T02:52Z: again?"})).stdout)
         self.assertNotIn("one zone", self.run_q("lint", self.item_file({**GOOD, "ask": "Merged 2026-10-19T08:19:42Z: again?"})).stdout)
         self.assertIn("one zone", self.run_q("lint", self.item_file({**GOOD, "ask": "Merged at 08:19Z: again?"})).stdout)
+        self.assertIn("one zone", self.run_q("lint", self.item_file({**GOOD, "ask": "Merged at 08:19:42Z: again?"})).stdout)
+        self.assertIn("one zone", self.run_q("lint", self.item_file({**GOOD, "ask": "Merged:08:19Z, again?"})).stdout)
+        landing = {**GOOD, "choices": [{**GOOD["choices"][0], "pros": ["Lands at 08:19Z."]}, GOOD["choices"][1]]}
+        self.assertIn("one zone", self.run_q("lint", self.item_file(landing)).stdout)
         pointer = {**GOOD, "context": "<p>See G3 for the details.</p>"}
         r = self.run_q("ask", "t", self.item_file(pointer))
         self.assertIn("mostly a pointer to G3", r.stdout)

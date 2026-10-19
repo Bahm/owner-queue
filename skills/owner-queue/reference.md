@@ -34,7 +34,7 @@ A record is capped at 256 KiB. Questions stay small, and pictures go in files be
 | `status` | `open`: on the queue. `waiting`: Scheduled. `done`: Done, collapsed. `Q ask --reask` sets `open` unless the item file sets a status, and removes what closing wrote: `takenAt`, `order`, and `outcome` and `undo` unless the file sets them. A plain edit (`--version` without `--reask`) whose file carries a status gets a warning, since it sends that status as it is |
 | `group` | Kind chip: `go`, `domain`, `yours`, `review`, `house`, or a `config.kinds` key. `yours` goes under "Needs you, in person" |
 | `for` | Who decides it: `"owner"` or `"collaborator"` (anyone else it's shared with). Shows "For you" to them and "For the owner" or "For collaborators" to others; counts in "Needs you" only for them |
-| `choices` | `[{key, label, primary?, pros?, cons?, cost?}]`. Exactly one `primary` (Recommended). `pros`/`cons` are lists of short sentences; `Q ask` refuses anything else, which the page would show as nothing. An open question needs at least two, and `Q ask` refuses fewer; only a `yours` step goes without |
+| `choices` | `[{key, label, primary?, pros?, cons?, cost?}]`. Exactly one `primary` (Recommended). `pros`/`cons` are lists of short sentences. `Q ask` refuses any other value except `null`: the page shows nothing for a value that isn't a list, and a blank bullet for an empty sentence. An open question needs at least two, and `Q ask` refuses fewer; only a `yours` step goes without |
 | `secondOpinion` | `{choice, label}`: a badge on that choice, e.g. `{"choice": "b", "label": "Values review"}` |
 | `pick` | "My pick" line: the Recommended choice and why |
 | `priority`, `priorityReason` | "Priority n of m" and what waiting costs. Open questions only |
