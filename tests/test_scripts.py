@@ -78,6 +78,22 @@ class QueueScript(unittest.TestCase):
         r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "5", "--reask")
         self.assertIn("askedAt", json.loads(Path(self.writes(r)[0]["file_path"]).read_text()))
 
+    def test_reask_reopens_a_taken_in_question(self):
+        self.init()
+        self.run_q("ask", "t", self.item_file(GOOD))
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "7", "--reask")
+        body = json.loads(Path(self.writes(r)[0]["file_path"]).read_text())
+        self.assertEqual((body["status"], body["takenAt"]), ("open", {"__delete__": True}))
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "status": "waiting"}), "--version", "8", "--reask")
+        body = json.loads(Path(self.writes(r)[0]["file_path"]).read_text())
+        self.assertEqual((body["status"], body["takenAt"]), ("waiting", {"__delete__": True}))
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "9")
+        self.assertNotIn("status", json.loads(Path(self.writes(r)[0]["file_path"]).read_text()), "an edit leaves the status alone")
+        unranked = {field: value for field, value in GOOD.items() if field not in ("priority", "priorityReason")}
+        r = self.run_q("ask", "t", self.item_file({**unranked, "ref": "G1"}), "--version", "10", "--reask", ok=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("priority", r.stdout + r.stderr)
+
     def test_ask_again_before_sending_keeps_the_number(self):
         self.init()
         f = self.item_file({k: v for k, v in GOOD.items() if k != "ref"})
