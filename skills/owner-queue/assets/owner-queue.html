@@ -156,6 +156,16 @@ details.done .item { opacity: .85; }
 .placeholder strong { color: var(--ink); }
 .footer { font-size: .84rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: .8rem; display: grid; gap: .35rem; }
 #copyOut { width: 100%; min-height: 12rem; font-family: var(--font-mono); font-size: .8rem; }
+/* Anything else stays at the bottom of the screen while the questions above it scroll (the owner, 19 October).
+   Stuck, it shows only its box; at its own place, all of it. Too short a screen for both bars: it doesn't stick. */
+html { scroll-padding-bottom: var(--free-h, 0px); }
+#free-section { position: sticky; bottom: 0; z-index: 4; background: var(--bg); }
+#free-section.is-stuck { border-top: 1px solid var(--line); padding-block: .5rem; gap: .35rem; }
+#free-section.is-stuck .blurb, #free-section.is-stuck .others { display: none; }
+#free-section.is-stuck .section-head { border-bottom: 0; padding-bottom: 0; }
+#free-section.is-stuck .item { padding: .5rem .6rem; }
+#free-section.is-stuck textarea { max-height: min(30vh, 12rem); }
+@media (max-height: 32rem) { #free-section { position: static; } }
 @media (prefers-reduced-motion: reduce) { .fill, .item.flash, .feed li.flash, button.fold::before { transition: none; } }
 </style>
 
@@ -853,6 +863,26 @@ function renderFree() {
   }
   box.hidden = !box.childElementCount;
 }
+
+// Stuck or not is judged by its full height, measured while it isn't stuck, so showing less never unsticks it:
+// no flicker at the edge. The page keeps focused boxes clear of it (scroll-padding-bottom).
+const freeSection = $("free-section");
+let freeFull = 0, freeFrame = 0;
+function placeFree() {
+  freeFrame = 0;
+  if (freeSection.hidden) return;
+  const stuck = freeSection.classList.contains("is-stuck");
+  if (!stuck) freeFull = freeSection.offsetHeight;
+  const wrap = freeSection.parentElement;
+  const top = $("queue").getBoundingClientRect().bottom + (parseFloat(getComputedStyle(wrap).rowGap) || 0);
+  const stick = getComputedStyle(freeSection).position === "sticky" && top + freeFull > innerHeight + 1;
+  freeSection.classList.toggle("is-stuck", stick);
+  document.documentElement.style.setProperty("--free-h", stick ? freeSection.offsetHeight + "px" : "0px");
+}
+function placeFreeSoon() { if (!freeFrame) freeFrame = requestAnimationFrame(placeFree); }
+addEventListener("scroll", placeFreeSoon, { passive: true });
+addEventListener("resize", placeFreeSoon);
+new ResizeObserver(placeFreeSoon).observe(freeSection.parentElement);
 
 // ---- For information -------------------------------------------------------
 function feedKept() {

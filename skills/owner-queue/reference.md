@@ -81,6 +81,8 @@ Title, tally ("Needs you: n", "m answered, waiting for Claude"), status line, un
 - For information (48 hours)
 - Done
 
+Anything else stays at the bottom of the screen while the questions above it scroll, showing only its box; at its own place it shows all of it. On a screen under 32rem tall it doesn't stick.
+
 Answers save as typed: choices at once, notes 0.8 s after the last keystroke, on leaving the box, and on leaving the page. Typing is also kept in the browser until the store confirms it, so a reload or a republish loses nothing. A second click on a chosen option takes it back. A refused save turns the page read-only, with Copy all answers as the fallback.
 
 ## Panels

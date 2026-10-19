@@ -34,7 +34,7 @@ If another command already uses the name, run it as `/owner-queue:owner-queue`.
 - **Needs you, in person:** steps only you can take, shown only once they're ready. Each has what you'll need, numbered steps with Copy buttons, and a prompt to paste into the chat.
 - **The three most urgent decisions**, then **Your queue**, each question with "Priority n of m" and why. Every option shows its pros and cons and its cost to build. One is marked Recommended, and a second opinion that disagrees can carry its own badge.
 - **Panels:** for example a playable test build, or a zip of reference files to download.
-- **Scheduled**, **Anything else** (free text, as long as you like), **For information** (Claude's status, 48 hours of it), and **Done**.
+- **Scheduled**, **Anything else** (free text, as long as you like; it stays at the bottom of the screen while you read the questions), **For information** (Claude's status, 48 hours of it), and **Done**.
 - **A sticky bar** with progress, Submit answers, Ping me on updates (each queue can have its own sound), and Copy all answers.
 - **Other people:** answers from people you share the queue with show beside yours, under their claude.ai names. A question can say who decides it: you, or collaborators.
 - **Asking again:** when Claude re-asks a question, the earlier answers move under Previous answers.
@@ -93,6 +93,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - Every time on the page is the viewer's own: an ISO time (`2026-10-18T02:52Z`) or `<time datetime>` in any text is shown in each viewer's zone, and lint warns on "UTC" (2.7.0).
 - A collaborator's note on a question someone else decides shows as read once `take-in` has read it, with an optional reply under it (`take-in --reply REF=TEXT`; 2.8.0, the owner's O16).
 - Security (2.8.1, a reviewer's finding): only a real time and user id pass from the store to a session. The page mirrors and the watcher accepts and prints only those, and `queue.py answers` and `take-in` use the question's own labels and quote notes as their words. A submit time, a label or an answer id written to steer the session never reaches it.
+- Anything else stays at the bottom of the screen while you read the questions, as a box to type in; at its own place it shows all of it (2.9.0, the owner).
 
 ## License
 

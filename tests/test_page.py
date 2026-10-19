@@ -275,6 +275,30 @@ class PageTest(unittest.TestCase):
         p.wait_for_timeout(1000)
         self.assertEqual(self.store("people/u_owner/answers/anything-else")["note"], "Please prioritise G1.")
 
+    def test_anything_else_sticks_to_the_bottom(self):
+        p = self.open(width=380)
+        box = "(() => { const r = document.getElementById('free-section').getBoundingClientRect(); return [r.top, r.bottom, innerHeight]; })()"
+        top, bottom, height = p.evaluate(box)
+        self.assertAlmostEqual(bottom, height, delta=1, msg="stuck to the bottom of the screen at the top of the page")
+        self.assertIn("is-stuck", p.locator("#free-section").get_attribute("class"))
+        self.assertTrue(p.locator("#free-section .blurb").is_hidden(), "stuck, it shows only its box")
+        self.assertLess(bottom - top, 160, "small enough for a phone")
+        p.fill("#note-anything-else", "Typed while stuck.")
+        p.wait_for_timeout(1000)
+        self.assertEqual(self.store("people/u_owner/answers/anything-else")["note"], "Typed while stuck.")
+        p.evaluate("window.scrollTo(0, document.scrollingElement.scrollHeight)"); p.wait_for_timeout(150)
+        self.assertNotIn("is-stuck", p.locator("#free-section").get_attribute("class") or "")
+        self.assertTrue(p.locator("#free-section .blurb").is_visible(), "at its own place, all of it")
+        full = p.evaluate("document.getElementById('free-section').offsetHeight")
+        # Just short of room for all of it: it must settle, not flicker between stuck and not.
+        p.evaluate("""(full) => { const gap = parseFloat(getComputedStyle(document.querySelector('.wrap')).rowGap);
+            const top = document.getElementById('queue').getBoundingClientRect().bottom + gap;
+            window.scrollBy(0, top + full - innerHeight - 20); }""", full)
+        states = p.evaluate("""() => new Promise((done) => { const seen = []; let n = 0;
+            (function tick() { seen.push(document.getElementById('free-section').className); if (++n < 12) requestAnimationFrame(tick); else done(seen); })(); })""")
+        self.assertEqual(len(set(states[2:])), 1, states)
+        self.assertLessEqual(p.evaluate("document.scrollingElement.scrollWidth"), 380)
+
     # ---- submit, receipts and the wake flags ----
     def test_submit_saves_notes_first_and_wakes_nothing_by_default(self):
         p = self.open()
