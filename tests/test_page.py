@@ -75,7 +75,7 @@ class PageTest(unittest.TestCase):
         self.errors = []
         self.page.on("pageerror", lambda e: self.errors.append(str(e)))
         self.page.goto(self.url)
-        self.page.wait_for_selector("#section-open")
+        self.page.wait_for_selector("#section-open", state="attached")
         self.page.wait_for_timeout(150)
         return self.page
 
@@ -119,13 +119,13 @@ class PageTest(unittest.TestCase):
     # ---- answering ----
     def test_choose_and_take_back(self):
         p = self.open()
-        p.click("#item-g2 button.opt[data-key='b']")
+        p.click("#item-g2 .opt[data-key='b']")
         p.wait_for_timeout(100)
         saved = self.store("people/u_owner/answers/g2")
         self.assertEqual((saved["choice"], saved["choiceLabel"]), ("b", "G2 option B"))
-        self.assertEqual(p.get_attribute("#item-g2 button.opt[data-key='b']", "aria-checked"), "true")
+        self.assertEqual(p.get_attribute("#item-g2 .opt[data-key='b']", "aria-checked"), "true")
         self.assertIsNotNone(self.store("people/u_owner"), "the person's record exists, so others find their answers")
-        p.click("#item-g2 button.opt[data-key='b']")
+        p.click("#item-g2 .opt[data-key='b']")
         p.wait_for_timeout(100)
         self.assertIsNone(self.store("people/u_owner/answers/g2"), "a second click takes the answer back")
         before = p.evaluate("window.__writes.length")
@@ -133,7 +133,7 @@ class PageTest(unittest.TestCase):
         self.assertEqual(p.evaluate("window.__writes.length"), before, "nothing keeps saving after an answer is taken back")
         self.assertIsNone(p.evaluate("localStorage.getItem('oq:draft:g2')"), "no draft is left behind")
         p.reload()
-        p.wait_for_selector("#section-open")
+        p.wait_for_selector("#section-open", state="attached")
         p.wait_for_timeout(800)
         self.assertEqual(p.evaluate("(window.__writes || []).length"), 0, "a reload saves nothing either")
 
@@ -141,7 +141,7 @@ class PageTest(unittest.TestCase):
         p = self.open()
         p.fill("#note-g1", "Line one\nline two")
         p.reload()          # before the 800 ms save
-        p.wait_for_selector("#section-open")
+        p.wait_for_selector("#section-open", state="attached")
         p.wait_for_timeout(300)
         self.assertEqual(self.store("people/u_owner/answers/g1")["note"], "Line one\nline two")
         self.assertEqual(p.input_value("#note-g1"), "Line one\nline two")
@@ -151,7 +151,7 @@ class PageTest(unittest.TestCase):
         data["people/u_owner"] = {"lastAnswerAt": iso(120)}
         data["people/u_owner/answers/g1"] = {"choice": "b", "choiceLabel": "G1 option B", "note": "too vague", "at": iso(90)}
         p = self.open(data)
-        self.assertEqual(p.get_attribute("#item-g1 button.opt[data-key='b']", "aria-checked"), "false")
+        self.assertEqual(p.get_attribute("#item-g1 .opt[data-key='b']", "aria-checked"), "false")
         self.assertIn("previous answers (1)", self.text("#item-g1 .history").lower())
         self.assertFalse(p.evaluate("document.querySelector('#item-g1 details.history').open"), "Previous answers starts closed")
         p.click("#item-g1 details.history > summary")
@@ -175,7 +175,8 @@ class PageTest(unittest.TestCase):
 
     def test_closed_question_shows_the_answers(self):
         data = seed()
-        data["items/g7"].update({"takenAt": iso(3), "outcome": "Building option B."})
+        data["items/g7"].update({"takenAt": iso(3), "outcome": "Building option B.", "ask": "Which way for G7?", "context": "<p>What G7 was about.</p>",
+                                 "choices": decision("G7", 7, iso(60))["choices"]})
         data["people/u_owner"] = {"lastAnswerAt": iso(5)}
         data["people/u_owner/answers/g7"] = {"choice": "b", "choiceLabel": "G7 option B", "note": "but keep it small", "at": iso(5)}
         data["people/u_des"] = {"lastAnswerAt": iso(5)}
@@ -190,6 +191,13 @@ class PageTest(unittest.TestCase):
         self.assertIn("G7 option B", self.text("#item-g7 .others"))
         self.assertIn("closed", self.text("#item-g7 .meta").lower())
         self.assertEqual(p.locator("#item-g7 .others .stamp").count(), 0, "one time per closed question, not one per answer")
+        for part in (".ask", ".context", ".opts"):
+            self.assertTrue(p.locator(f"#item-g7 {part}").first.is_visible(), part + ": a closed question still shows what was asked")
+        self.assertEqual(p.get_attribute("#item-g7 .opts", "aria-readonly"), "true")
+        self.assertEqual(p.get_attribute("#item-g7 .opt[data-key='b']", "aria-checked"), "true")
+        self.assertTrue(p.locator("#item-g7 .box-label").is_hidden(), "no note box on a closed question")
+        self.assertTrue(p.locator("#item-g7 .history").is_hidden(), "no 'Previous answers (0)'")
+        self.assertTrue(p.locator("#item-g1 .history").is_hidden())
         p.click("#item-g7 button.fold")
         self.assertEqual(p.locator("#item-g7 .folded .stamp").count(), 1)
         self.assertEqual(self.errors, [])
@@ -362,7 +370,7 @@ class PageTest(unittest.TestCase):
     def test_collaborator_view(self):
         p = self.open(cfg={"me": "u_des", "isOwner": False})
         self.assertIn("For you", self.text("#item-g4 .chips"))
-        p.click("#item-g4 button.opt[data-key='a']")
+        p.click("#item-g4 .opt[data-key='a']")
         p.click("#submitBtn")
         p.wait_for_timeout(200)
         self.assertTrue(self.store("people/u_des")["submittedAt"])
@@ -383,10 +391,13 @@ class PageTest(unittest.TestCase):
     def test_refused_write_turns_read_only(self):
         p = self.open()
         p.evaluate("window.__mockFail = {code: 'invalid_argument'}")
-        p.click("#item-g1 button.opt[data-key='a']")
+        p.click("#item-g1 .opt[data-key='a']")
         p.wait_for_timeout(150)
         self.assertIn("can't save answers", self.text("#status"))
         self.assertTrue(p.locator("#submitBtn").is_disabled())
+        self.assertEqual(p.get_attribute("#item-g2 .opts", "aria-readonly"), "true")
+        p.click("#item-g2 .opt[data-key='a']", force=True)
+        self.assertEqual(p.get_attribute("#item-g2 .opt[data-key='a']", "aria-checked"), "false", "a read-only page picks nothing")
 
     # ---- updates ----
     def test_live_update_and_ping(self):
@@ -441,7 +452,7 @@ class PageTest(unittest.TestCase):
         self.assertIn("Your answer: G2 option A", p.locator("#item-g2 .folded").inner_text())
         p.locator("#done-summary").click()
         self.assertIn("Shipped in v0.1.", p.locator("#item-g7 .folded").inner_text(), "done questions start folded, showing the outcome")
-        p.reload(); p.wait_for_selector("#section-open"); p.wait_for_timeout(200)
+        p.reload(); p.wait_for_selector("#section-open", state="attached"); p.wait_for_timeout(200)
         self.assertTrue(p.locator("#item-g1 .opts").is_hidden(), "a fold is remembered in this browser")
         p.locator("#item-g1 h3").click()
         self.assertTrue(p.locator("#item-g1 .opts").is_visible())
@@ -460,6 +471,30 @@ class PageTest(unittest.TestCase):
         self.assertTrue(p.locator("#item-g2 .opts").is_visible())
         self.assertTrue(p.locator("#feed-list").is_visible())
         self.assertEqual(self.errors, [])
+
+    def test_numbers_in_options_and_page_links_work(self):
+        data = seed()
+        data["items/g2"]["choices"][0]["cons"] = ["Undoes G3."]
+        data["items/g1"]["context"] = '<p>See <a href="#item-g3">the third one</a> and <a href="https://example.com/x">the docs</a>.</p>'
+        p = self.open(data)
+        link = p.locator("#item-g2 .opt[data-key='a'] a.qref", has_text="G3")
+        self.assertEqual(link.count(), 1, "a question number in an option's cons is a link")
+        link.click(); p.wait_for_timeout(700)
+        self.assertEqual(p.get_attribute("#item-g2 .opt[data-key='a']", "aria-checked"), "false", "following the link picks nothing")
+        self.assertTrue(p.evaluate("(() => { const r = document.getElementById('item-g3').getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight / 2; })()"))
+        self.assertIn("G2", p.locator("#item-g3 .refby").inner_text())
+        p.focus("#item-g2 .opt[data-key='b']"); p.keyboard.press("Enter")
+        self.assertEqual(p.get_attribute("#item-g2 .opt[data-key='b']", "aria-checked"), "true", "Enter picks the focused option")
+        p.focus("#item-g2 .opt[data-key='a']"); p.keyboard.press(" ")
+        self.assertEqual(p.get_attribute("#item-g2 .opt[data-key='a']", "aria-checked"), "true", "so does Space")
+        own = p.locator("#item-g1 .context a", has_text="the third one")
+        self.assertIsNone(own.get_attribute("target"), "Claude's link to a question stays in this tab")
+        self.assertEqual(own.get_attribute("data-item"), "g3")
+        self.assertEqual(p.locator("#item-g1 .context a", has_text="the docs").get_attribute("target"), "_blank")
+        p.evaluate("window.scrollTo(0, 0)")
+        own.click(); p.wait_for_timeout(700)
+        self.assertEqual(len(p.context.pages), 1)
+        self.assertTrue(p.evaluate("(() => { const r = document.getElementById('item-g3').getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight / 2; })()"))
 
     def test_plain_numbers_link_only_as_questions(self):
         asked = iso(60)

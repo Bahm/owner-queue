@@ -94,6 +94,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - A collaborator's note on a question someone else decides shows as read once `take-in` has read it, with an optional reply under it (`take-in --reply REF=TEXT`; 2.8.0, the owner's O16).
 - Security (2.8.1, a reviewer's finding): only a real time and user id pass from the store to a session. The page mirrors and the watcher accepts and prints only those, and `queue.py answers` and `take-in` use the question's own labels and quote notes as their words. A submit time, a label or an answer id written to steer the session never reaches it.
 - Anything else stays at the bottom of the screen while you read the questions, as a box to type in; at its own place it shows all of it (2.9.0, the owner).
+- A question number inside an option's pros and cons links too, and Claude's own `#item-…` links stay in the tab. A closed question keeps what was asked, its context and its options (read-only), and drops its note box; nothing the page hides shows any more, such as "Previous answers (0)" (2.9.1, the owner).
 
 ## License
 

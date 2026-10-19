@@ -43,7 +43,7 @@ A record is capped at 256 KiB. Questions stay small, and pictures go in files be
 | `due` | Chip, e.g. "Oct 20" |
 | `effort`, `cost`, `undo`, `unblocks`, `outcome` | Labelled rows. `cost` is the cost to build: work and tokens. `outcome` is what was done about the answers |
 | `read` | `{uid: {at, answerAt, reply?}}`, written by `take-in`: that person's input on a question someone else decides was read at `at`. The page shows it under their note while their answer is still the one read (`answerAt`), with the reply if any |
-| `takenAt` | When `take-in` closed it. A closed question shows one time, its "Closed" row (`takenAt`, else `order`), in the viewer's zone, and everyone's answers, yours included |
+| `takenAt` | When `take-in` closed it. A closed question shows one time, its "Closed" row (`takenAt`, else `order`), in the viewer's zone, and everyone's answers, yours included, under what was asked, its context and its options (read-only) |
 | `needs`, `steps`, `prompt` | For `yours`: what you'll need; numbered steps `[{text, command?}]` with Copy buttons; a prompt to paste into the chat, with a Copy button |
 | `input` | Label of the note box (default "Note (optional)") |
 | `source` | "Source: …" line naming the file or report with the evidence |
