@@ -81,18 +81,44 @@ class QueueScript(unittest.TestCase):
     def test_reask_reopens_a_taken_in_question(self):
         self.init()
         self.run_q("ask", "t", self.item_file(GOOD))
-        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "7", "--reask")
-        body = json.loads(Path(self.writes(r)[0]["file_path"]).read_text())
+        result = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "7", "--reask")
+        body = json.loads(Path(self.writes(result)[0]["file_path"]).read_text())
         self.assertEqual((body["status"], body["takenAt"]), ("open", {"__delete__": True}))
-        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "status": "waiting"}), "--version", "8", "--reask")
-        body = json.loads(Path(self.writes(r)[0]["file_path"]).read_text())
+        result = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "status": "waiting"}), "--version", "8", "--reask")
+        body = json.loads(Path(self.writes(result)[0]["file_path"]).read_text())
         self.assertEqual((body["status"], body["takenAt"]), ("waiting", {"__delete__": True}))
-        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "9")
-        self.assertNotIn("status", json.loads(Path(self.writes(r)[0]["file_path"]).read_text()), "an edit leaves the status alone")
+        result = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "9")
+        self.assertNotIn("status", json.loads(Path(self.writes(result)[0]["file_path"]).read_text()), "an edit leaves the status alone")
         unranked = {field: value for field, value in GOOD.items() if field not in ("priority", "priorityReason")}
-        r = self.run_q("ask", "t", self.item_file({**unranked, "ref": "G1"}), "--version", "10", "--reask", ok=False)
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("priority", r.stdout + r.stderr)
+        result = self.run_q("ask", "t", self.item_file({**unranked, "ref": "G1"}), "--version", "10", "--reask", ok=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("priority", result.stdout + result.stderr)
+
+    def test_reask_clears_what_closing_wrote(self):
+        self.init()
+        def item_body(result):
+            write = next(write for write in self.writes(result) if (write["collection"], write["doc_id"]) == ("items", "g1"))
+            return json.loads(Path(write["file_path"]).read_text())
+        def merge(record, update):
+            return {field: value for field, value in {**record, **update}.items() if value != {"__delete__": True}}
+        record = {**item_body(self.run_q("ask", "t", self.item_file(GOOD))), "askedAt": iso(60)}
+        dump = self.tmp / "dump"
+        for path, body in (("items/g1", record), ("people/u_des", {"submittedAt": iso(5)}),
+                           ("people/u_des/answers/g1", {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(30)})):
+            (dump / path).parent.mkdir(parents=True, exist_ok=True)
+            (dump / f"{path}.json").write_text(json.dumps(body))
+        closers = {
+            "close": item_body(self.run_q("close", "t", "G1", "--outcome", "Round 1 outcome.", "--undo", "Revert it.", "--version", "2")),
+            "take-in": item_body(self.run_q("take-in", "t", dump, "--pins", "G1=2", "--outcome", "G1=Round 1 outcome.")),
+        }
+        reasked = item_body(self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "3", "--reask"))
+        for closer, closed in closers.items():
+            with self.subTest(closer):
+                self.assertEqual(closed["status"], "done")
+                reopened = merge(merge(record, closed), reasked)
+                self.assertEqual(reopened["status"], "open")
+                left = (set(closed) - {"status", "priority", "priorityReason"}) & set(reopened)
+                self.assertEqual(sorted(left), [], "written when it closed, and kept by the re-ask")
 
     def test_ask_again_before_sending_keeps_the_number(self):
         self.init()

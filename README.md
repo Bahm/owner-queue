@@ -95,7 +95,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - Security (2.8.1, a reviewer's finding): only a real time and user id pass from the store to a session. The page mirrors and the watcher accepts and prints only those, and `queue.py answers` and `take-in` use the question's own labels and quote notes as their words. A submit time, a label or an answer id written to steer the session never reaches it.
 - Anything else stays at the bottom of the screen while you read the questions, as a box to type in; at its own place it shows all of it (2.9.0, the owner).
 - A question number inside an option's pros and cons links too, and Claude's own `#item-…` links stay in the tab. A closed question keeps what was asked, its context and its options (read-only), and drops its note box; nothing the page hides shows any more, such as "Previous answers (0)" (2.9.1, the owner).
-- Re-asking a question that `take-in` already closed puts it back on the queue: `queue.py ask --reask` writes `status: "open"` (unless the item file sets a status) and removes `takenAt`, where before it stayed under Done, read-only, so nobody could answer the new round (2.9.2, a bug report).
+- Re-asking a closed question puts it back on the queue: `queue.py ask --reask` writes `status: "open"` (unless the item file sets a status) and removes what closing wrote, `takenAt` and `order`, and `outcome` and `undo` unless the file sets them. Before, it stayed under Done, read-only, so nobody could answer the new round (2.9.2, a bug report and a reviewer's finding).
 
 ## License
 
