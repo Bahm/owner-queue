@@ -32,6 +32,7 @@ HERE = Path(__file__).resolve().parent
 TEMPLATE = HERE.parent / "assets" / "owner-queue.html"
 TOKEN = "__QUEUE_TITLE__"
 FREE_ID = "anything-else"
+CLOSED_FIELDS = ("takenAt", "order", "outcome", "undo")
 FEED_HOURS = 48
 BATCH_MAX = 50
 CAP = 256 * 1024
@@ -491,7 +492,8 @@ def cmd_ask(a):
     if a.reask and not new:
         item.setdefault("status", "open")
         if item["status"] != "done":
-            item["takenAt"] = {"__delete__": True}
+            for field in CLOSED_FIELDS:
+                item.setdefault(field, {"__delete__": True})
     errors, warnings = lint_item(item, state)
     if not report(errors, warnings):
         die("Not written: fix the errors above.")
