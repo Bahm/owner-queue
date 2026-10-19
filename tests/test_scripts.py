@@ -170,10 +170,17 @@ class QueueScript(unittest.TestCase):
         r = self.run_q("lint", self.item_file(warn))
         self.assertIn("argue both sides", r.stdout)
         self.assertIn("Lint can't check these", r.stdout)
+        bare = {field: value for field, value in GOOD.items() if field != "choices"}
+        for choices in ([], [GOOD["choices"][0]]):
+            result = self.run_q("lint", self.item_file({**bare, "choices": choices}), ok=False)
+            self.assertNotEqual(result.returncode, 0, len(choices))
+            self.assertIn("needs at least two `choices`", result.stdout, "a decision without options is refused")
+        self.assertNotIn("two `choices`", self.run_q("lint", self.item_file({**bare, "status": "waiting"})).stdout)
         yours = {"title": "Plug in the phone", "ask": "Plug it in?", "group": "yours", "priority": 2,
                  "priorityReason": "x", "steps": [{"text": "Run", "command": "./phone.sh"}]}
         r = self.run_q("lint", self.item_file(yours))
         self.assertIn("relative path", r.stdout)
+        self.assertNotIn("two `choices`", r.stdout, "a step only they can take needs no options")
         r = self.run_q("lint", self.item_file({**GOOD, "ask": "What I'm asking: you submitted at 02:52 UTC; again?"}))
         self.assertIn("a time written for one zone", r.stdout)
         self.assertNotIn("one zone", self.run_q("lint", self.item_file({**GOOD, "ask": "Submitted 2026-10-18T02:52Z: again?"})).stdout)

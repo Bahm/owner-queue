@@ -204,6 +204,10 @@ def lint_item(item, state=None):
             errors.append(f"{ref}: an open question needs `priority` (1 is first).")
         if not str(item.get("priorityReason", "")).strip():
             errors.append(f"{ref}: an open question needs `priorityReason`: one sentence on what waiting costs.")
+        if item.get("group") != "yours" and len(choices) < 2:
+            # Every open point is a decision with options (SKILL.md); one went out with none (the owner, 19 October).
+            errors.append(f"{ref}: an open question needs at least two `choices` to pick from, each with `pros` and `cons`. "
+                          "A step only they can take is `group: \"yours\"`, with `steps` or a `prompt`.")
     keys = [c.get("key") for c in choices]
     if len(keys) != len(set(keys)) or any(not k for k in keys):
         errors.append(f"{ref}: every choice needs a unique `key`.")

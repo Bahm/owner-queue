@@ -61,7 +61,7 @@ Once the owner approves, the change goes where it belongs:
 - A new dependency (a runtime, library, tool or service), with its cost and the alternatives, including writing the part yourself. Report it; never add it first.
 - A limit or safeguard nobody asked for, and an approach a collaborator should approve, before it's built.
 - Each question goes to whoever decides it (`for`: `"owner"` or `"collaborator"`). Each concern gets its own queue; a question that moves is closed in the old one.
-- Every open point is its own question with options. Never a question inside For information or chat.
+- Every open point is its own question with options: at least two, which `ask` enforces. Never a question inside For information or chat.
 
 ## Writing a question
 
