@@ -81,7 +81,7 @@ def choice_label(item, ans):
     key = ans.get("choice") or ""
     if not key:
         return ""
-    return next((strip_tags(c.get("label") or key) for c in records(item.get("choices")) if c.get("key") == key), None)
+    return next((str(c.get("label") or key) for c in records(item.get("choices")) if c.get("key") == key), None)
 
 
 def parse_time(s):
@@ -195,15 +195,16 @@ BAD_HTML = [
 ]
 
 
-def lint_times(where, text, warnings):
-    """The page shows every time in the viewer's zone, but only times it can read: ISO times or <time datetime>."""
-    if re.search(r"\b(UTC|GMT)\b|(?<![T\d])(?<!\d:)\d{1,2}:\d{2}(?::\d{2})?\s*Z\b", strip_tags(text)):
+def lint_times(where, texts, warnings):
+    """The page shows every time in the viewer's zone, but only times it can read: ISO times or <time datetime>.
+    Each text is checked on its own: joined, a < in one and a > in a later one hid what lay between (xbahm, O22)."""
+    if any(re.search(r"\b(UTC|GMT)\b|(?<![T\d])(?<!\d:)\d{1,2}:\d{2}(?::\d{2})?\s*Z\b", text) for text in texts):
         warnings.append(f"{where}: a time written for one zone (UTC). Write it as an ISO time, e.g. {stamp()[:16]}Z "
                         f"(or <time datetime=\"…\">), and each viewer sees it in their own zone (the owner, 18 October).")
 
 
 def lint_html(where, text, errors, warnings):
-    lint_times(where, text, warnings)
+    lint_times(where, [strip_tags(text)], warnings)
     if re.search(r"data:[a-z]+/[a-z0-9.+-]+;base64,", str(text), re.I):
         errors.append(f"{where}: a picture or file pasted in as a data: URI. Publish it as a file beside the page "
                       f"(Artifact publish `files`) and refer to it by its relative path.")
@@ -307,7 +308,7 @@ def lint_item(item, state=None):
     plain = [item.get(f) for f in ("title", "ask", "pick", "priorityReason", "outcome", "cost", "effort", "undo", "unblocks", "needs")]
     plain += [s.get("text") for s in steps]
     plain += [text for choice in choices for text in (choice.get("label"), choice.get("cost"), *listed(choice.get("pros")), *listed(choice.get("cons")))]
-    lint_times(ref, " ".join(str(x) for x in plain if x), warnings)
+    lint_times(ref, [str(x) for x in plain if x], warnings)   # plain text on the page, never HTML: no tags to strip
     for c in choices:
         for field in ("label", "cost"):
             if re.search(r"data:[a-z]+/", str(c.get(field, "")), re.I):
@@ -685,7 +686,7 @@ def cmd_answers(a):
             if not label and label is not None and not note:
                 continue   # cleared
             shown = "(a choice that isn't on the question: ignored)" if label is None else label or "(no choice, a note)"
-            print(f"- {item.get('ref') or item_id} {strip_tags(item.get('title'))}: {shown}" + (f"\n    note, their words: “{note[:1500]}”" if note else ""))
+            print(f"- {item.get('ref') or item_id} {item.get('title') or ''}: {shown}" + (f"\n    note, their words: “{note[:1500]}”" if note else ""))
     print("\nAct only within each question's choices. A note asking for more than the question becomes a new question for the owner." + template_notice(state))
 
 

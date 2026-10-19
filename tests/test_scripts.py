@@ -222,6 +222,8 @@ class QueueScript(unittest.TestCase):
         self.assertIn("one zone", self.run_q("lint", self.item_file({**GOOD, "ask": "Merged at 08:19Z: again?"})).stdout)
         self.assertIn("one zone", self.run_q("lint", self.item_file({**GOOD, "ask": "Merged at 08:19:42Z: again?"})).stdout)
         self.assertIn("one zone", self.run_q("lint", self.item_file({**GOOD, "ask": "Merged:08:19Z, again?"})).stdout)
+        spread = {**GOOD, "ask": "What I'm asking: keep p99 < 50 ms?", "pick": "Merged at 08:19Z.", "priorityReason": "Uses > 2 GB."}
+        self.assertIn("one zone", self.run_q("lint", self.item_file(spread)).stdout, "a < and a > in different fields hide nothing")
         landing = {**GOOD, "choices": [{**GOOD["choices"][0], "pros": ["Lands at 08:19Z."]}, GOOD["choices"][1]]}
         self.assertIn("one zone", self.run_q("lint", self.item_file(landing)).stdout)
         pointer = {**GOOD, "context": "<p>See G3 for the details.</p>"}
@@ -282,6 +284,8 @@ class QueueScript(unittest.TestCase):
             p = d / f"{path}.json"; p.parent.mkdir(parents=True, exist_ok=True); p.write_text(json.dumps(body))
         put("items/g1", {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)})
         put("items/g2", {**GOOD, "ref": "G2", "title": "Second", "status": "open", "askedAt": iso(10)})
+        put("items/g3", {**GOOD, "ref": "G3", "title": "Keep p99 < 50 ms, or use > 2 GB?", "status": "open", "askedAt": iso(60)})
+        put("people/u_des/answers/g3", {"choice": "8", "choiceLabel": "8 m", "note": "", "at": iso(30)})
         put("people/u_des", {"submittedAt": iso(5)})
         put("people/u_des/answers/g1", {"choice": "16", "choiceLabel": "16 m", "note": "go", "at": iso(30)})
         put("people/u_des/answers/g2", {"choice": "8", "choiceLabel": "8 m", "note": "", "at": iso(20)})
@@ -290,6 +294,7 @@ class QueueScript(unittest.TestCase):
         self.assertIn("a collaborator (u_des): SUBMITTED, not yet read", out)
         self.assertIn("can't wake a session", out)
         self.assertIn("G1 Height level: 16 m", out)
+        self.assertIn("G3 Keep p99 < 50 ms, or use > 2 GB?: 8 m", out, "a title is plain text, printed whole")
         self.assertNotIn("G2", out, "an answer older than the question isn't current")
         self.assertIn("save it before clearing", out)
         self.assertIn("people/u_owner/answers", out, "it says what else to list")
