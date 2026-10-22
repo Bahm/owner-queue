@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """queue.py and queue_watch.py. Run: python3 -m unittest tests/test_scripts.py"""
-import contextlib, importlib.util, io, json, os, re, subprocess, sys, tempfile, unittest
+import atexit, contextlib, importlib.util, io, json, os, re, shutil, subprocess, sys, tempfile, unittest
 import datetime as dt
 from pathlib import Path
+
+# Every temp folder this run makes, ours and the scripts' and the browser's, goes in one folder removed when the run
+# ends: before, each run left its folders in the temp dir, over a thousand of them (the roc-ui session, 22 October).
+if not os.path.basename(tempfile.gettempdir()).startswith("owner-queue-tests-"):
+    tempfile.tempdir = os.environ["TMPDIR"] = tempfile.mkdtemp(prefix="owner-queue-tests-")
+    atexit.register(shutil.rmtree, tempfile.tempdir, True)
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "skills/owner-queue/scripts"

@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """The queue page in a real browser (Playwright), against a stand-in store. Run: python3 -m unittest tests/test_page.py"""
-import datetime as dt, json, tempfile, unittest
+import atexit, datetime as dt, json, os, shutil, tempfile, unittest
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+
+# Every temp folder this run makes, ours and the scripts' and the browser's, goes in one folder removed when the run
+# ends: before, each run left its folders in the temp dir, over a thousand of them (the roc-ui session, 22 October).
+if not os.path.basename(tempfile.gettempdir()).startswith("owner-queue-tests-"):
+    tempfile.tempdir = os.environ["TMPDIR"] = tempfile.mkdtemp(prefix="owner-queue-tests-")
+    atexit.register(shutil.rmtree, tempfile.tempdir, True)
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = ROOT / "skills/owner-queue/assets/owner-queue.html"
