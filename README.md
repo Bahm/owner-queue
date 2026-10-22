@@ -101,6 +101,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - `queue.py ask` refuses `pros` or `cons` that aren't a list of sentences, or that hold an empty one: the page showed nothing for a single text, and lint let it through (a number or `true` crashed it). The time lint no longer warns on an ISO time with seconds, such as `2026-10-19T08:19:42Z`, and still warns on a bare `08:19:42Z` (2.10.1, xbahm's finding; Bahm's review).
 - Lint catches what the page would silently drop: a field name the page doesn't read (it suggests the one meant, e.g. `options` for `choices`), and `choices`, `steps` or `history` that aren't lists of objects, which crashed lint before. The page shows ISO times with up to six decimals in each viewer's zone, as Python writes them (2.11.0, the owner's O21; the B4B session's B305).
 - Lint checks each plain field on its own, so a `<` in one field and a `>` in a later one no longer hide the text between them from the time check, and `queue.py answers` prints titles and choice labels whole (2.11.1, xbahm's finding; the owner's O22).
+- A session reads the answers only when the owner says they're ready, or when the watcher wakes it. It no longer checks on its own after a resume or now and then: a session that compacted every few minutes read the queue after almost every compaction, 82 times in a day, and wrote "No new answers" about 60 times (2.12.0, xbahm).
 
 ## License
 
