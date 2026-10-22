@@ -8,7 +8,7 @@
 | `items/<id>` | Claude (owner only) | One question each |
 | `feed/<id>` | Claude (owner only) | One For information entry each: `{at, html}` |
 | `receipts/<uid>` | Claude (owner only) | `{readAt}`: when Claude took in that person's answers; the page tells them "Claude took in your answers on …" |
-| `people/<uid>` | that person only | `{submittedAt, lastAnswerAt}` |
+| `people/<uid>` | that person only | `{submittedAt, lastAnswerAt}`. A collaborator's answer counts once it was saved before their last `submittedAt`; until then `answers` and `take-in` treat it as still being written (O26) |
 | `people/<uid>/answers/<item id>` | that person only | `{choice, choiceLabel, note, at}` |
 | `people/<uid>/answers/anything-else` | that person only | `{note, at}`: the Anything else box |
 

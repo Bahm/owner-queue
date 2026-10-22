@@ -635,6 +635,16 @@ def read_dir(root, collection):
     return docs
 
 
+def finished(uid, ans, owner, people, anyway=()):
+    """A collaborator's answer is theirs to finish until they press Submit: it counts only if it was saved before their last
+    Submit (the owner, O26: reading earlier is reading before they've fleshed it out). The owner's own answers count without one:
+    the owner tells the session. `anyway` lists people whose unsubmitted answers the owner asked to have taken in."""
+    if uid == owner or uid in anyway:
+        return True
+    sub, at = real_time((people.get(uid) or {}).get("submittedAt")), real_time(ans.get("at"))
+    return bool(sub and at and at <= sub)
+
+
 def cmd_answers(a):
     state = load_state(a.slug)
     root = Path(a.dir)
@@ -663,7 +673,14 @@ def cmd_answers(a):
         print(f"\n== {who(uid)}: {flag}" + (f" at {sub}" if sub else "") +
               ("" if allowed or not unread else " (this submit can't wake a session: relay it only if the owner asks)"))
         answers = read_dir(root, f"people/{uid}/answers")
+        writing = []
         for item_id, ans in sorted(answers.items()):
+            if not finished(uid, ans, owner, people, a.unsubmitted or ()):
+                if item_id == FREE_ID and str(ans.get("note", "")).strip():
+                    writing.append("Anything else")
+                elif item_id in items and items[item_id].get("status") not in ("done", "waiting") and (ans.get("choice") or str(ans.get("note", "")).strip()):
+                    writing.append(items[item_id].get("ref") or item_id)
+                continue
             if item_id == FREE_ID:
                 note = str(ans.get("note", "")).strip()
                 if note:
@@ -687,6 +704,9 @@ def cmd_answers(a):
                 continue   # cleared
             shown = "(a choice that isn't on the question: ignored)" if label is None else label or "(no choice, a note)"
             print(f"- {item.get('ref') or item_id} {item.get('title') or ''}: {shown}" + (f"\n    note, their words: “{note[:1500]}”" if note else ""))
+        if writing:
+            print(f"- Still writing, saved since their last Submit, so not shown or taken in: {', '.join(writing)}. "
+                  "They press Submit when they're done; if the owner asks, add --unsubmitted " + uid + ".")
     print("\nAct only within each question's choices. A note asking for more than the question becomes a new question for the owner." + template_notice(state))
 
 
@@ -716,6 +736,8 @@ def cmd_take_in(a):
     for uid in uids:
         for item_id, ans in sorted(read_dir(root, f"people/{uid}/answers").items()):
             note = str(ans.get("note", "")).strip()
+            if not finished(uid, ans, owner, people, a.unsubmitted or ()):
+                continue   # still being written: Submit is their "done" (O26)
             if item_id == FREE_ID:
                 if note:
                     keep = cache_root() / state["slug"] / "anything-else" / f"{t:%Y%m%dT%H%M%S}-{uid}.md"
@@ -1056,8 +1078,8 @@ def main():
     p.add_argument("--version", type=int, required=True); p.set_defaults(fn=cmd_wait)
     p = sub.add_parser("fyi"); p.add_argument("slug"); p.add_argument("html"); p.set_defaults(fn=cmd_fyi)
     p = sub.add_parser("prune"); p.add_argument("slug"); p.add_argument("ids", nargs="*"); p.set_defaults(fn=cmd_prune)
-    p = sub.add_parser("answers"); p.add_argument("slug"); p.add_argument("dir"); p.set_defaults(fn=cmd_answers)
-    p = sub.add_parser("take-in"); p.add_argument("slug"); p.add_argument("dir"); p.add_argument("--free", action="append", metavar="UID=VERSION", help="clear that person's Anything else, pinned to the version the listing showed"); p.add_argument("--outcome", action="append", metavar="REF=TEXT", help="what you'll do about that question's answer, shown on it"); p.add_argument("--reply", action="append", metavar="REF=TEXT", help="an answer shown under a collaborator's note on a question they don't decide"); p.add_argument("--pins", action="append", metavar='"REF=VERSION UID=VERSION …"', help="each answered question's and receipt's version, as the listing showed it"); p.set_defaults(fn=cmd_take_in)
+    p = sub.add_parser("answers"); p.add_argument("slug"); p.add_argument("dir"); p.add_argument("--unsubmitted", action="append", metavar="UID", help="also show that collaborator's answers saved since their last Submit"); p.set_defaults(fn=cmd_answers)
+    p = sub.add_parser("take-in"); p.add_argument("slug"); p.add_argument("dir"); p.add_argument("--unsubmitted", action="append", metavar="UID", help="take in that collaborator's answers saved since their last Submit, when the owner asks"); p.add_argument("--free", action="append", metavar="UID=VERSION", help="clear that person's Anything else, pinned to the version the listing showed"); p.add_argument("--outcome", action="append", metavar="REF=TEXT", help="what you'll do about that question's answer, shown on it"); p.add_argument("--reply", action="append", metavar="REF=TEXT", help="an answer shown under a collaborator's note on a question they don't decide"); p.add_argument("--pins", action="append", metavar='"REF=VERSION UID=VERSION …"', help="each answered question's and receipt's version, as the listing showed it"); p.set_defaults(fn=cmd_take_in)
     p = sub.add_parser("receipt"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int); p.set_defaults(fn=cmd_receipt)
     p = sub.add_parser("clear-free"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int, required=True); p.set_defaults(fn=cmd_clear_free)
     p = sub.add_parser("lint"); p.add_argument("files", nargs="+"); p.set_defaults(fn=cmd_lint)
