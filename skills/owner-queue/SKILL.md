@@ -29,7 +29,7 @@ While a session works from a queue, the queue is where the owner reads. Status, 
 3. **Housekeeping first, before any other work, even mid-task** (the owner: answered questions leave the queue before anything else): `Q take-in <slug> <out_dir> --pins "<ref>=<version> <uid>=<version> …" [--free <uid>=<version>]`, and send its batch. The store takes a write to an existing record only pinned to its version, and the listing prints each version; without the pins it needs, `take-in` says which. It closes every answered question (the page shows the answers on it; `--outcome <ref>="what you'll do"` adds your plan), writes a receipt for each submit read, saves each "Anything else" note to a file and clears it (pinned to the version the listing showed, so nothing typed since is lost). It writes nothing under For information: each sender sees "Claude took in your answers on …". An answer to a question `for` someone else stays open as input: `take-in` marks it read on the page ("Claude read your note on …; the owner decides this one"), and `--reply <ref>="…"` answers a question asked in it, right under it (the owner, O16).
 4. Then act. Re-ask (`Q ask … --reask`) a question whose answer leaves it open. What you'll do about an answer goes in that question's outcome, not under For information: an answered question shows only under Done (the owner, O14).
 
-On every resume, and now and then while working, read the answers again: people answer without pressing Submit.
+Read the answers again only when the owner says they're ready, or when the watcher exits with a wake flag on (below). Never on your own: not on a resume, after a compaction, or now and then.
 
 ## Acting on answers
 
