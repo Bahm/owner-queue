@@ -534,6 +534,26 @@ class PageTest(unittest.TestCase):
         p.click("text=Bad")
         self.assertEqual(p.locator(".play-frame iframe").count(), 1)
 
+    def test_a_failed_download_says_why(self):
+        data = seed()
+        data["config/page"]["panels"] = [{"id": "dl", "title": "Files", "html": '<p><button data-save-zip="refs.zip" data-files="">Download refs</button> '
+                                          '<button data-save="game/godgame.html">Download it (godgame.html)</button></p>'}]
+        p = self.open(data, cfg={"downloads": True})
+        p.click("text=Download refs"); p.wait_for_timeout(200)
+        self.assertEqual(p.evaluate("window.__saved"), "refs.zip")
+        self.assertIn("Saved.", self.text(".panel .save-note"))
+        p.evaluate("window.__saveFail = {code: 'extension_not_enabled', message: 'off'}")
+        p.click("text=Download refs"); p.wait_for_timeout(200)
+        self.assertIn(".zip files can't be downloaded in this view. (extension_not_enabled)", self.text(".panel .save-note"))
+        p.evaluate("window.__saveFail = {code: 'capability_removed', message: 'gone'}")
+        p.click("text=Download refs"); p.wait_for_timeout(200)
+        self.assertIn("Downloading isn't available in this view. (capability_removed)", self.text(".panel .save-note"))
+        p.evaluate("window.__saveFail = null")
+        p.click("text=Download it (godgame.html)"); p.wait_for_timeout(300)
+        note = p.locator(".panel .save-note").nth(1).inner_text()
+        self.assertIn("Couldn't download it:", note, "a file that doesn't load says so, not 'unavailable'")
+        self.assertNotIn("Saved", note)
+
     def test_no_store(self):
         self.ctx = self.browser.new_context()
         self.ctx.add_init_script("sessionStorage.setItem('__mockcfg', JSON.stringify({noDb: true}))")

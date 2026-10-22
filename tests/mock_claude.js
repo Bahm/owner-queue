@@ -64,7 +64,7 @@
     use: async (name) => {
       if (name === "db") return cfg.noDb ? null : db;
       if (name === "user") return user;
-      if (name === "downloads") return cfg.downloads ? { save: async (x) => { window.__saved = x.filename; } } : null;
+      if (name === "downloads") return cfg.downloads ? { save: async (x) => { if (window.__saveFail) throw window.__saveFail; window.__saved = x.filename; } } : null;
       return null;
     },
   };

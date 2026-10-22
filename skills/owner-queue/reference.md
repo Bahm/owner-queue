@@ -92,6 +92,7 @@ Answers save as typed: choices at once, notes 0.8 s after the last keystroke, on
 - `<button data-play="game/godgame.html">Play here</button>` opens that file in a frame below the button, on click only.
 - `<button data-save="hand/rest.png">Download</button>` saves one file through the downloads capability.
 - `<button data-save-zip="charts.zip" data-files="hand/a.png hand/b.png">Download all</button>` packs the files into one zip.
+- A save that fails says why next to its button, with the platform's code, e.g. ".html files can't be downloaded in this view. (extension_not_enabled)", or "Couldn't download it: the file didn't load (HTTP 404)." Quote the line in a report.
 
 ## Links between questions
 

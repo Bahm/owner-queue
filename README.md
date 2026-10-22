@@ -103,6 +103,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - Lint checks each plain field on its own, so a `<` in one field and a `>` in a later one no longer hide the text between them from the time check, and `queue.py answers` prints titles and choice labels whole (2.11.1, xbahm's finding; the owner's O22).
 - A session reads the answers only when the owner says they're ready, or when the watcher wakes it. It no longer checks on its own after a resume or now and then: a session that compacted every few minutes read the queue after almost every compaction, 82 times in a day, and wrote "No new answers" about 60 times (2.12.0, xbahm).
 - `queue.py answers` and `take-in` wait for a collaborator's Submit: an answer they saved since their last Submit is still being written, so it's listed as "still writing", its question stays open, and their Anything else isn't cleared. Your own answers count without Submit, and `--unsubmitted <uid>` takes one in when you ask (2.13.0, the owner's O26).
+- A panel download that fails says why, with the platform's code (e.g. `extension_not_enabled`), instead of "Downloading isn't available here" for every failure, and a file that doesn't load says so (2.13.1, the God Game session's report).
 
 ## License
 

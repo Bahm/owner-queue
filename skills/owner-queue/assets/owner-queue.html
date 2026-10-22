@@ -1058,6 +1058,18 @@ async function zipFiles(paths, folder) {
   return new Blob([...body, ...dir, e], { type: "application/zip" });
 }
 function relative(path) { return path && !/^[a-z][a-z0-9+.-]*:/i.test(path) && !path.startsWith("//") ? path : null; }
+// Why a save failed, in words, with the platform's code, so a report can name it (the God Game session, 22 October).
+function saveFailed(e, filename) {
+  const code = e && typeof e.code === "string" ? e.code : "", ext = (String(filename).match(/\.([a-z0-9]+)$/i) || [, "this"])[1].toLowerCase();
+  const words = {
+    rate_limited: "A save is already waiting for your answer.",
+    extension_not_enabled: "." + ext + " files can't be downloaded in this view.",
+    rejected_extension: "." + ext + " files can't be downloaded.",
+    too_large: "The file is too large to download here.",
+    bad_request: "The file couldn't be read for downloading.",
+  }[code] || (code ? "Downloading isn't available in this view." : "Couldn't download it: " + String((e && e.message) || "unknown error") + ".");
+  return " " + words + (code ? " (" + code + ")" : "");
+}
 document.addEventListener("click", async (ev) => {
   const b = ev.target.closest && ev.target.closest("[data-save], [data-save-zip], [data-play]");
   if (!b || !b.closest(".context, .panel")) return;
@@ -1074,15 +1086,17 @@ document.addEventListener("click", async (ev) => {
     iframe.title = "Test build"; iframe.allow = "fullscreen; pointer-lock"; iframe.src = src; frame.append(iframe);
     b.parentElement.append(frame); b.textContent = "Close"; iframe.focus(); return;
   }
-  if (!downloads) { say(" Downloading isn't available here."); return; }
+  if (!downloads) { say(" Downloading isn't available in this view (no downloads here)."); return; }
+  const zip = b.getAttribute("data-save-zip"), path = relative(b.getAttribute("data-save")), filename = zip || String(path || "").split("/").pop();
   try {
-    const zip = b.getAttribute("data-save-zip"), path = relative(b.getAttribute("data-save"));
     if (zip) say(" Packing…");
     const files = zip ? (b.getAttribute("data-files") || "").split(/\s+/).map(relative).filter(Boolean) : [];
-    const blob = zip ? await zipFiles(files, zip.replace(/\.zip$/, "")) : await (await fetch(path)).blob();
-    await downloads.save({ filename: zip || path.split("/").pop(), data: blob });
+    let blob;
+    if (zip) blob = await zipFiles(files, zip.replace(/\.zip$/, ""));
+    else { const r = await fetch(path); if (!r.ok) throw new Error("the file didn't load (HTTP " + r.status + ")"); blob = await r.blob(); }
+    await downloads.save({ filename, data: blob });
     say(" Saved.");
-  } catch (e) { const code = e && e.code; if (code === "declined") { say(""); return; } say(code === "rate_limited" ? " A save is already waiting for your answer." : " Downloading isn't available here."); }
+  } catch (e) { if (e && e.code === "declined") { say(""); return; } say(saveFailed(e, filename)); }
 });
 
 // ---- config ------------------------------------------------------------------
