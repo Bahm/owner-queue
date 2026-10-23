@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The queue page in a real browser (Playwright), against a stand-in store. Run: python3 -m unittest tests/test_page.py"""
-import atexit, datetime as dt, json, os, shutil, tempfile, unittest
+import atexit, datetime as dt, functools, http.server, json, os, shutil, tempfile, threading, unittest
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -14,6 +14,17 @@ if not os.path.basename(tempfile.gettempdir()).startswith("owner-queue-tests-"):
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = ROOT / "skills/owner-queue/assets/owner-queue.html"
 MOCK = (Path(__file__).parent / "mock_claude.js").read_text()
+# A host that sizes the queue's frame to the page, so the host scrolls and the frame never does.
+HOST = ("<!doctype html><html><body style='margin:0'><div style='height:48px'>host</div>"
+        "<iframe id=frame name=queue src=index.html style='border:0;width:100%;height:600px;display:block'></iframe><script>"
+        "const f = document.getElementById('frame'); f.onload = () => new f.contentWindow.ResizeObserver(() => {"
+        " f.style.height = f.contentDocument.documentElement.scrollHeight + 'px'; }).observe(f.contentDocument.documentElement);"
+        "</script></body></html>")
+
+
+class Quiet(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
 
 
 def iso(minutes_ago=0.0):
@@ -64,14 +75,20 @@ class PageTest(unittest.TestCase):
                                            "<meta name=viewport content='width=device-width,initial-scale=1'></head><body>"
                                            + html + "</body></html>")
         cls.url = (folder / "index.html").as_uri()
+        (folder / "host.html").write_text(HOST)
+        cls.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Quiet, directory=str(folder)))
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.host_url = f"http://127.0.0.1:{cls.server.server_port}/host.html"
 
     @classmethod
     def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
         cls.browser.close()
         cls.pw.stop()
 
-    def open(self, data=None, cfg=None, width=1000):
-        self.ctx = self.browser.new_context(viewport={"width": width, "height": 900}, timezone_id=getattr(self, "ctx_tz", "UTC"))
+    def open(self, data=None, cfg=None, width=1000, height=900, url=None):
+        self.ctx = self.browser.new_context(viewport={"width": width, "height": height}, timezone_id=getattr(self, "ctx_tz", "UTC"))
         boot = ("if (window === window.top && !sessionStorage.getItem('__mockdb')) {"
                 f"sessionStorage.setItem('__mockdb', {json.dumps(json.dumps(data if data is not None else seed()))});"
                 f"sessionStorage.setItem('__mockcfg', {json.dumps(json.dumps(cfg or {}))}); }}")
@@ -80,8 +97,9 @@ class PageTest(unittest.TestCase):
         self.page = self.ctx.new_page()
         self.errors = []
         self.page.on("pageerror", lambda e: self.errors.append(str(e)))
-        self.page.goto(self.url)
-        self.page.wait_for_selector("#section-open", state="attached")
+        self.page.goto(url or self.url)
+        self.view = self.page.frame(name="queue") or self.page.main_frame
+        self.view.wait_for_selector("#section-open", state="attached")
         self.page.wait_for_timeout(150)
         return self.page
 
@@ -503,6 +521,29 @@ class PageTest(unittest.TestCase):
         own.click(); p.wait_for_timeout(700)
         self.assertEqual(len(p.context.pages), 1)
         self.assertTrue(p.evaluate("(() => { const r = document.getElementById('item-g3').getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight / 2; })()"))
+
+    def test_a_link_lands_when_the_host_sizes_the_frame_to_the_page(self):
+        # Opening Done and unfolding the question a link points to grows the page after the scroll. A host that sizes the
+        # frame to the page grows it a moment later, which undid the scroll: links into Done went nowhere (the owner,
+        # 23 October, on God Game's G111).
+        data, asked = seed(), iso(300)
+        for n in (8, 9, 11):
+            data[f"items/g{n}"] = {**decision(f"G{n}", n, asked), "status": "done", "takenAt": iso(200 - n), "order": 1792390000 + n,
+                                   "outcome": f"Did G{n}.", "context": "<p>" + "Some background. " * 300 + "</p>"}
+        data["items/g11"]["context"] = "<p>As in G8, the slope stays.</p>"
+        p = self.open(data, height=700, url=self.host_url)
+        self.view.evaluate("setFolds({ g11: false }); document.getElementById('done').open = true")
+        link = self.view.locator("#item-g11 .context a.qref", has_text="G8")
+        link.scroll_into_view_if_needed(); link.click(); p.wait_for_timeout(1500)
+        top = p.evaluate("document.getElementById('frame').getBoundingClientRect().top") + \
+            self.view.evaluate("document.getElementById('item-g8').getBoundingClientRect().top")
+        self.assertTrue(0 <= top < 700 / 2, f"G8 ends {round(top)} px from the top of a 700 px screen")
+        link.scroll_into_view_if_needed(); link.click(); p.wait_for_timeout(300)
+        p.mouse.move(500, 400); p.mouse.wheel(0, 900); p.wait_for_timeout(300)
+        scrolled = p.evaluate("scrollY")
+        p.evaluate("document.getElementById('frame').style.height = (parseFloat(document.getElementById('frame').style.height) + 300) + 'px'")
+        p.wait_for_timeout(500)
+        self.assertEqual(p.evaluate("scrollY"), scrolled, "once the viewer scrolls, a resize leaves the page where they put it")
 
     def test_plain_numbers_link_only_as_questions(self):
         asked = iso(60)

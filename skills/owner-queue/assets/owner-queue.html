@@ -497,10 +497,30 @@ document.addEventListener("click", (event) => {
   if (a.dataset.feed && folds["#feed"]) setFolds({ "#feed": false });
   target.style.scrollMarginTop = ($("bar").offsetHeight + 12) + "px";
   target.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  followResizes(() => target.scrollIntoView({ block: "start" }));
   target.setAttribute("tabindex", "-1"); target.focus({ preventScroll: true });
   target.classList.remove("flash"); void target.offsetWidth; target.classList.add("flash");
   setTimeout(() => target.classList.remove("flash"), 1600);
 });
+
+// A host that sizes this frame to the page, scrolling itself instead of the frame, grows the frame only after a link
+// has opened Done or unfolded its target, and that undoes the scroll (the owner, 23 October, on God Game's G111). So for
+// a moment after a link, each resize scrolls to the target again, until the viewer scrolls or types themselves.
+const VIEWER_MOVES = ["wheel", "touchstart", "keydown"];
+let stopFollowing = () => {};
+function followResizes(scroll) {
+  stopFollowing();
+  let frame = 0;
+  const again = () => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; scroll(); }); };
+  const stop = () => {
+    removeEventListener("resize", again); for (const type of VIEWER_MOVES) removeEventListener(type, stop);
+    clearTimeout(timer); cancelAnimationFrame(frame); stopFollowing = () => {};
+  };
+  const timer = setTimeout(stop, 2000);
+  addEventListener("resize", again);
+  for (const type of VIEWER_MOVES) addEventListener(type, stop, { passive: true });
+  stopFollowing = stop;
+}
 
 function isCurrent(item, answer) { return Boolean(answer) && (!item || !item.askedAt || String(answer.at || "") >= String(item.askedAt)); }
 // An answer is a pick, a note, or both: a note alone answers a question with choices too (the owner, 18 October).

@@ -1,7 +1,7 @@
 // A stand-in for claude.ai's window.claude (db, user, downloads) for the page tests. The store lives in
 // sessionStorage, so it survives a reload the way the real one does. Seed it with sessionStorage __mockdb (path -> record) and __mockcfg ({me, isOwner, names, noDb, downloads}).
 (() => {
-  if (window !== window.top) return;     // not inside a test build's iframe
+  if (window !== window.top && window.name !== "queue") return;     // not inside a test build's iframe, only the queue's own
   const KEY = "__mockdb";
   const cfg = JSON.parse(sessionStorage.getItem("__mockcfg") || "{}");
   let data = JSON.parse(sessionStorage.getItem(KEY) || "{}");
