@@ -129,6 +129,29 @@ class PageTest(unittest.TestCase):
         self.assertIn("recommended", self.text("#item-g1 .opts").lower())
         self.assertIn("Copy prompt", self.text("#item-g5"))
 
+    def test_you_always_means_whoever_is_viewing(self):
+        # Each viewer reads "you" as themselves, so the page's own words never use it for anyone else: a collaborator saw
+        # "Your call" next to "For the owner", and the owner's in-person steps under their own "Needs you, in person"
+        # (the owner, 23 October).
+        data = seed()
+        data["items/g5"]["for"] = "owner"
+        data["items/g8"] = {**data["items/g5"], "ref": "G8", "title": "Export the hand", "for": "collaborator", "priority": 6}
+        data["items/g1"]["for"] = "owner"
+        for who, cfg, person, other in (("the owner", None, "G5", "G8"), ("a collaborator", {"me": "u_des", "isOwner": False}, "G8", "G5")):
+            with self.subTest(who):
+                p = self.open(data, cfg)
+                self.assertEqual(p.locator("#section-person .item .ref").all_inner_texts(), [person], "only the viewer's own steps")
+                self.assertIn(other, p.locator("#section-open .item .ref").all_inner_texts(), "someone else's step ranks with the rest")
+                gone = self.text("#queue")
+                for phrase in ("Your call", "Only you can do this", "Your queue"):
+                    self.assertNotIn(phrase, gone)
+                self.assertIn("Judgment call", self.text("#item-g1 .chips"))
+                self.assertEqual(p.locator(f"#item-{other.lower()} .chips .chip").first.inner_text(), "In person")
+                self.assertIn("what it needs", self.text(f"#item-{other.lower()}").lower(), "labels show in capitals")
+                self.assertIn("what you'll need", self.text(f"#item-{person.lower()}").lower())
+                self.assertEqual(p.locator("#section-open h2 > span").first.inner_text(), "Other open questions")
+                self.ctx.close(); self.ctx = None
+
     def test_feed_newest_first_and_48_hours(self):
         p = self.open()
         entries = p.locator("#feed-list li").all_inner_texts()

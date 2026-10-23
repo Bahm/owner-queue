@@ -32,7 +32,7 @@ If another command already uses the name, run it as `/owner-queue:owner-queue`.
 ## The page
 
 - **Needs you, in person:** steps only you can take, shown only once they're ready. Each has what you'll need, numbered steps with Copy buttons, and a prompt to paste into the chat.
-- **The three most urgent decisions**, then **Your queue**, each question with "Priority n of m" and why. Every option shows its pros and cons and its cost to build. One is marked Recommended, and a second opinion that disagrees can carry its own badge.
+- **The three most urgent decisions**, then **Other open questions**, each question with "Priority n of m" and why. Every option shows its pros and cons and its cost to build. One is marked Recommended, and a second opinion that disagrees can carry its own badge.
 - **Panels:** for example a playable test build, or a zip of reference files to download.
 - **Scheduled**, **Anything else** (free text, as long as you like; it stays at the bottom of the screen while you read the questions), **For information** (Claude's status, 48 hours of it), and **Done**.
 - **A sticky bar** with progress, Submit answers, Ping me on updates (each queue can have its own sound), and Copy all answers.
@@ -105,6 +105,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - `queue.py answers` and `take-in` wait for a collaborator's Submit: an answer they saved since their last Submit is still being written, so it's listed as "still writing", its question stays open, and their Anything else isn't cleared. Your own answers count without Submit, and `--unsubmitted <uid>` takes one in when you ask (2.13.0, the owner's O26).
 - A panel download that fails says why, with the platform's code (e.g. `extension_not_enabled`), instead of "Downloading isn't available here" for every failure, and a file that doesn't load says so (2.13.1, the God Game session's report).
 - A link to a question lands on it when the host sizes the queue's frame to the page: a link into Done grew the page after scrolling, and the host's resize undid the scroll. For two seconds after a link, the page scrolls to it again when the frame resizes, until you scroll yourself (2.13.2, the owner on God Game's G111).
+- "You" on the page always means whoever is reading it. The kind chips name the kind of question (Judgment call, In person) instead of "Your call" and "Only you can do this", which contradicted "For the owner" for a collaborator. Someone else's in-person step ranks with the other questions instead of sitting under your "Needs you, in person". "Your queue" is "Open questions", the bulk button says "Accept all Recommended", and SKILL.md tells sessions to name people by role in a shared queue (2.14.0, the owner).
 
 ## License
 

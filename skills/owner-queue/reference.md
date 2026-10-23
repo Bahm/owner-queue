@@ -32,7 +32,7 @@ A record is capped at 256 KiB. Questions stay small, and pictures go in files be
 | `ask` | The question, in plain words. Hidden when it repeats the title |
 | `context` | HTML (allowlist below): what the reader needs to decide, inside the question |
 | `status` | `open`: on the queue. `waiting`: Scheduled. `done`: Done, collapsed. `Q ask --reask` sets `open` unless the item file sets a status, and removes what closing wrote: `takenAt`, `order`, and `outcome` and `undo` unless the file sets them. A plain edit (`--version` without `--reask`) whose file carries a status gets a warning, since it sends that status as it is |
-| `group` | Kind chip: `go`, `domain`, `yours`, `review`, `house`, or a `config.kinds` key. `yours` goes under "Needs you, in person" |
+| `group` | Kind chip: `go` (Go-ahead), `domain` (Judgment call), `yours` (In person), `review`, `house` (Housekeeping), or a `config.kinds` key. A kind names the kind of question, never whose it is: `for` says that. A `yours` step goes under "Needs you, in person" for whoever it's `for` (everyone, without a `for`), and ranks with the other questions for everyone else |
 | `for` | Who decides it: `"owner"` or `"collaborator"` (anyone else it's shared with). Shows "For you" to them and "For the owner" or "For collaborators" to others; counts in "Needs you" only for them |
 | `choices` | `[{key, label, primary?, pros?, cons?, cost?}]`. Exactly one `primary` (Recommended). `pros`/`cons` are lists of short sentences. `Q ask` refuses any other value except `null`: the page shows nothing for a value that isn't a list, and a blank bullet for an empty sentence. An open question needs at least two, and `Q ask` refuses fewer; only a `yours` step goes without |
 | `secondOpinion` | `{choice, label}`: a badge on that choice, e.g. `{"choice": "b", "label": "Values review"}` |
@@ -66,7 +66,7 @@ Plain-text fields render `backticks` as code and never as HTML. Everything a per
 | `unsafe` | `{unattendedWake, collaboratorWake}`; only through `Q config` flags |
 | `delegated` | What collaborators may decide on their own, shown under the status line; only through `Q config --delegate` |
 | `panels` | `[{id, title, note, html}]`: sections after "Needs you, in person" |
-| `kinds`, `bulk`, `savedText`, `pendingText` | Extra kind labels; an "Accept all my picks" button `{kind, label?}`; save and tally wording |
+| `kinds`, `bulk`, `savedText`, `pendingText` | Extra kind labels; an "Accept all Recommended" button `{kind, label?}`; save and tally wording. Labels the page shows every viewer: "you" and "my" in them read as the viewer, so name Claude's picks "Recommended" |
 
 ## The page, top to bottom
 
@@ -74,7 +74,7 @@ Title, tally ("Needs you: n", "m answered, waiting for Claude"), status line, un
 
 - Needs you, in person
 - The three most urgent decisions
-- Your queue
+- Open questions ("Other open questions" when either section above has any)
 - Panels
 - Scheduled
 - Anything else

@@ -207,7 +207,7 @@ html { scroll-padding-bottom: var(--free-h, 0px); }
 
   <section class="section" id="feed-section" aria-labelledby="feed-h" hidden>
     <div class="section-head"><h2 id="feed-h"><button type="button" class="fold" id="feedFold" aria-expanded="true" aria-controls="feed-body" aria-label="Collapse For information"></button><span class="fold-label" id="feedLabel">For information</span><span class="count" id="feed-count"></span></h2></div>
-    <p class="blurb">Newest first, in your time. Anything older than 48 hours drops off.</p>
+    <p class="blurb">Newest first, in your time zone. Anything older than 48 hours drops off.</p>
     <div class="feed" id="feed-body"><ul id="feed-list"></ul><p id="feed-empty" class="blurb" hidden>Nothing new in the last 48 hours.</p></div>
   </section>
 
@@ -223,7 +223,9 @@ html { scroll-padding-bottom: var(--free-h, 0px); }
 
 <script>
 "use strict";
-const DEFAULT_KINDS = { go: "Go-ahead", domain: "Your call", yours: "Only you can do this", review: "Review", house: "Housekeeping" };
+// A kind names the kind of question, never whose it is: the `for` chip says that, and each viewer reads "you" as
+// themselves, so "Your call" beside "For the owner" told a collaborator two things at once (the owner, 23 October).
+const DEFAULT_KINDS = { go: "Go-ahead", domain: "Judgment call", yours: "In person", review: "Review", house: "Housekeeping" };
 const FREE_ID = "anything-else";
 const FEED_HOURS = 48;
 
@@ -719,14 +721,15 @@ function updateItem(id, item, rank, openCount) {
     if (!value) continue; v.meta.append(el("dt", "", term), withCode(el("dd"), value));
   }
   v.meta.hidden = !v.meta.childElementCount;
-  if (changedKey(v, "needs", item.needs)) { v.needs.replaceChildren(); if (item.needs) { v.needs.append(el("span", "label", "What you'll need")); v.needs.append(withCode(el("p"), item.needs)); } }
+  const doer = forMe(item);
+  if (changedKey(v, "needs", [item.needs, doer])) { v.needs.replaceChildren(); if (item.needs) { v.needs.append(el("span", "label", doer ? "What you'll need" : "What it needs")); v.needs.append(withCode(el("p"), item.needs)); } }
   v.needs.hidden = !item.needs || !open;
   if (changedKey(v, "steps", item.steps)) {
     v.steps.replaceChildren();
     for (const s of arr(item.steps)) { const li = el("li"); if (s.text) li.append(withCode(el("p"), s.text)); if (s.command) li.append(commandBlock(s.command)); v.steps.append(li); }
   }
   v.steps.hidden = !arr(item.steps).length || !open;
-  if (changedKey(v, "prompt", item.prompt)) { v.prompt.replaceChildren(); if (item.prompt) { v.prompt.append(el("span", "label", "When you're ready, paste this into the chat")); v.prompt.append(commandBlock(item.prompt, "Copy prompt")); } }
+  if (changedKey(v, "prompt", [item.prompt, doer])) { v.prompt.replaceChildren(); if (item.prompt) { v.prompt.append(el("span", "label", doer ? "When you're ready, paste this into the chat" : "The prompt to paste into the chat, when ready")); v.prompt.append(commandBlock(item.prompt, "Copy prompt")); } }
   v.prompt.hidden = !item.prompt || !open;
 
   v.noteText.textContent = item.input || (choices.length ? "Note (optional)" : "Your answer");
@@ -780,7 +783,7 @@ function updateItem(id, item, rank, openCount) {
 const SECTIONS = [
   { key: "person", title: "Needs you, in person", blurb: "Only what's ready for you now, each with what you'll need and a prompt to paste into the chat when you're ready." },
   { key: "urgent", title: "The three most urgent decisions", blurb: "The decisions that cost the most while they wait, with the arguments for and against. Redone at each submit and report." },
-  { key: "open", title: "Your queue", blurb: "Most important first. Each says why it ranks where it does." },
+  { key: "open", title: "Open questions", blurb: "Most important first. Each says why it ranks where it does." },
   { key: "panels", title: "", blurb: "" },
   { key: "waiting", title: "Scheduled", blurb: "Not on you. Listed so you know what runs next." },
 ];
@@ -790,11 +793,11 @@ function buildSections() {
   for (const s of SECTIONS) {
     const root = el("section", "section"); root.id = "section-" + s.key;
     if (s.key !== "panels") {
-      const head = el("div", "section-head"), h = el("h2", "", s.title), count = el("span", "count");
-      h.append(count); head.append(h);
+      const head = el("div", "section-head"), title = el("span", "", s.title), h = el("h2"), count = el("span", "count");
+      h.append(title, count); head.append(h);
       if (s.key === "open") { const bulk = el("button", "", ""); bulk.type = "button"; bulk.hidden = true; bulk.id = "bulkBtn"; bulk.addEventListener("click", acceptAll); head.append(bulk); }
       root.append(head, el("p", "blurb", s.blurb));
-      sectionViews.set(s.key, { root, count, keys: {}, list: root.appendChild(el("div", "list")) });
+      sectionViews.set(s.key, { root, title, count, keys: {}, list: root.appendChild(el("div", "list")) });
     } else sectionViews.set(s.key, { root, keys: {}, list: root.appendChild(el("div", "list")) });
     main.append(root);
   }
@@ -821,11 +824,13 @@ function render() {
   const all = sorted();
   const open = all.filter(([, it]) => sectionOf(it) === "open");
   const ranks = new Map(open.map(([id], i) => [id, i + 1]));
-  const person = open.filter(([, it]) => it.group === "yours");
+  // Someone else's in-person step isn't "Needs you, in person": it ranks with the rest, its `for` chip saying whose it is.
+  const inPerson = (it) => it.group === "yours" && forMe(it);
+  const person = open.filter(([, it]) => inPerson(it));
   const useUrgent = config.urgent !== false;
   const urgent = useUrgent ? open.filter(([, it]) => isDecision(it) && !it.lowPriority).slice(0, 3) : [];
   const urgentIds = new Set(urgent.map(([id]) => id));
-  const rest = open.filter(([id, it]) => it.group !== "yours" && !urgentIds.has(id));
+  const rest = open.filter(([id, it]) => !inPerson(it) && !urgentIds.has(id));
   const placed = { person, urgent, open: rest, waiting: all.filter(([, it]) => sectionOf(it) === "waiting") };
   for (const [key, list] of Object.entries(placed)) {
     const view = sectionViews.get(key);
@@ -843,6 +848,7 @@ function render() {
   $("done-summary").textContent = "Done (" + doneList.length + ")";
   $("done-section").hidden = !doneList.length;
   for (const [id, v] of views) if (!items.has(id)) { v.root.remove(); views.delete(id); }
+  sectionViews.get("open").title.textContent = person.length || urgent.length ? "Other open questions" : "Open questions";
   if (!open.length) sectionViews.get("open").list.replaceChildren(el("p", "blurb", "Nothing is open right now. New questions appear here as they're added."));
   renderPanels();
   renderFree(); renderFeed(); paintFeedFold(); renderTally(open); renderSubmit(); renderBulk(open);
@@ -867,7 +873,7 @@ function renderBulk(open) {
   const bulk = isObj(config.bulk) && config.bulk.kind ? config.bulk : null;
   const list = bulk ? open.filter(([id, it]) => it.group === bulk.kind && !isAnswered(id) && arr(it.choices).some((c) => c.primary)) : [];
   b.hidden = list.length < 2; b.disabled = !db || !me || readOnly;
-  b.textContent = ((bulk && bulk.label) || "Accept all my picks") + " (" + list.length + ")";
+  b.textContent = ((bulk && bulk.label) || "Accept all Recommended") + " (" + list.length + ")";
 }
 async function acceptAll() {
   const bulk = isObj(config.bulk) ? config.bulk : null; if (!bulk) return;
@@ -1082,7 +1088,7 @@ function relative(path) { return path && !/^[a-z][a-z0-9+.-]*:/i.test(path) && !
 function saveFailed(e, filename) {
   const code = e && typeof e.code === "string" ? e.code : "", ext = (String(filename).match(/\.([a-z0-9]+)$/i) || [, "this"])[1].toLowerCase();
   const words = {
-    rate_limited: "A save is already waiting for your answer.",
+    rate_limited: "Another download is still waiting for you to confirm or cancel it.",
     extension_not_enabled: "." + ext + " files can't be downloaded in this view.",
     rejected_extension: "." + ext + " files can't be downloaded.",
     too_large: "The file is too large to download here.",
