@@ -36,7 +36,7 @@ If another command already uses the name, run it as `/owner-queue:owner-queue`.
 - **Panels:** for example a playable test build, or a zip of reference files to download.
 - **Scheduled**, **Anything else** (free text, as long as you like; it stays at the bottom of the screen while you read the questions), **For information** (Claude's status, 48 hours of it), and **Done**.
 - **A sticky bar** with progress, Submit answers, Ping me on updates (each queue can have its own sound), and Copy all answers.
-- **Other people:** answers from people you share the queue with show beside yours, under their claude.ai names. A question can say who decides it: you, or collaborators.
+- **Other people:** answers from people you share the queue with show beside yours, under their claude.ai names. A question can say who decides it: you, or collaborators. A question for someone else is yellow where your own are green.
 - **Asking again:** when Claude re-asks a question, the earlier answers move under Previous answers.
 
 ## Submit and waking a session
@@ -106,6 +106,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - A panel download that fails says why, with the platform's code (e.g. `extension_not_enabled`), instead of "Downloading isn't available here" for every failure, and a file that doesn't load says so (2.13.1, the God Game session's report).
 - A link to a question lands on it when the host sizes the queue's frame to the page: a link into Done grew the page after scrolling, and the host's resize undid the scroll. For two seconds after a link, the page scrolls to it again when the frame resizes, until you scroll yourself (2.13.2, the owner on God Game's G111).
 - "You" on the page always means whoever is reading it. The kind chips name the kind of question (Judgment call, In person) instead of "Your call" and "Only you can do this", which contradicted "For the owner" for a collaborator. Someone else's in-person step ranks with the other questions instead of sitting under your "Needs you, in person". "Your queue" is "Open questions", the bulk button says "Accept all Recommended", and SKILL.md tells sessions to name people by role in a shared queue (2.14.0, the owner).
+- A question for someone else wears yellow where the viewer's own wear green: its border, number, kind chip, selected option and answered stripe, with a solid yellow "For the owner" (or "For collaborators") chip. "For you" is green. Pros stay green on every card (2.15.0, the owner: God Game's designer answered G116, for the owner, three times).
 
 ## License
 

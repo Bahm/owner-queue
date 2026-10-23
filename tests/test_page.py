@@ -152,6 +152,31 @@ class PageTest(unittest.TestCase):
                 self.assertEqual(p.locator("#section-open h2 > span").first.inner_text(), "Other open questions")
                 self.ctx.close(); self.ctx = None
 
+    def test_someone_elses_question_is_yellow(self):
+        # The designer answered God Game's G116, for the owner, three times: its card wore the same green as their own
+        # (the owner, 23 October). Someone else's question now wears the page's yellow throughout.
+        data = seed()
+        data["items/g1"]["for"] = "owner"
+        data["people/u_des/answers/g1"] = {"choice": "a", "choiceLabel": "G1 option A", "note": "", "at": iso(1)}
+        data["people/u_des/answers/g4"] = {"choice": "a", "choiceLabel": "G4 option A", "note": "", "at": iso(1)}
+        p = self.open(data, cfg={"me": "u_des", "isOwner": False})
+        colour = lambda sel, prop: p.evaluate("([s, prop]) => getComputedStyle(document.querySelector(s))[prop]", [sel, prop])
+        token = lambda name: p.evaluate("(n) => { const d = document.createElement('div'); d.style.color = `var(${n})`; document.body.append(d); "
+                                        "const c = getComputedStyle(d).color; d.remove(); return c; }", name)
+        rec, line, green = token("--rec"), token("--rec-line"), token("--green")
+        self.assertEqual(p.locator("#queue .item.not-mine .ref").all_inner_texts(), ["G1"], "only the owner's question, for the designer")
+        for sel, prop, want in (("#item-g1", "borderLeftColor", line), ("#item-g1 .opt[aria-checked='true']", "borderTopColor", line),
+                                ("#item-g1 .ref", "color", rec), ("#item-g1 .chip.for", "backgroundColor", rec)):
+            self.assertEqual(colour(sel, prop), want, sel)
+        for sel, prop in (("#item-g4", "borderLeftColor"), ("#item-g4 .opt[aria-checked='true']", "borderTopColor"), ("#item-g4 .ref", "color")):
+            self.assertEqual(colour(sel, prop), green, sel + ": the designer's own question stays green")
+        self.assertEqual(p.evaluate("getComputedStyle(document.querySelector('#item-g1 .case .pro'), '::marker').color"), green,
+                         "a pro is still green on someone else's question: it says good, not whose")
+        self.assertEqual(self.text("#item-g4 .chip.for"), "For you")
+        self.ctx.close(); self.ctx = None
+        p = self.open(data)
+        self.assertEqual(p.locator("#queue .item.not-mine .ref").all_inner_texts(), ["G4"], "and to the owner, the collaborators' one")
+
     def test_feed_newest_first_and_48_hours(self):
         p = self.open()
         entries = p.locator("#feed-list li").all_inner_texts()

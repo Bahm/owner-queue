@@ -7,18 +7,19 @@
 :root {
   --bg: #f6f7f4; --surface: #ffffff; --ink: #1d2320; --muted: #5d6762; --line: #d9ddd7;
   --accent: #2f6b4f; --accent-ink: #ffffff; --accent-soft: #e3efe8;
-  --rec: #8a5a12; --rec-soft: #f6ecd9; --warn: #a1470b; --warn-soft: #f7e8da; --quiet: #7b8881;
+  --rec: #8a5a12; --rec-soft: #f6ecd9; --rec-line: #d4a32c; --warn: #a1470b; --warn-soft: #f7e8da; --quiet: #7b8881;
+  --green: var(--accent); --green-soft: var(--accent-soft);  /* resolved here: a card that turns --accent yellow keeps green for pros */
   --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #141816; --surface: #1b201d; --ink: #e4e9e5; --muted: #9aa59f; --line: #2e3631;
   --accent: #7cc39c; --accent-ink: #0b1912; --accent-soft: #1f3128;
-  --rec: #e3b768; --rec-soft: #33291a; --warn: #ee9f5e; --warn-soft: #382416; --quiet: #6e7c75; color-scheme: dark } }
+  --rec: #e3b768; --rec-soft: #33291a; --rec-line: #e3b768; --warn: #ee9f5e; --warn-soft: #382416; --quiet: #6e7c75; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #141816; --surface: #1b201d; --ink: #e4e9e5; --muted: #9aa59f; --line: #2e3631;
   --accent: #7cc39c; --accent-ink: #0b1912; --accent-soft: #1f3128;
-  --rec: #e3b768; --rec-soft: #33291a; --warn: #ee9f5e; --warn-soft: #382416; --quiet: #6e7c75; color-scheme: dark }
+  --rec: #e3b768; --rec-soft: #33291a; --rec-line: #e3b768; --warn: #ee9f5e; --warn-soft: #382416; --quiet: #6e7c75; color-scheme: dark }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }   /* a class's display never shows what the page hid */
 body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--font-body); }
@@ -75,7 +76,13 @@ button.link { border: 0; background: none; padding: 0; color: var(--accent); tex
 .chips { display: flex; flex-wrap: wrap; gap: .3rem; }
 .chip { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .03em; padding: .08rem .45rem; border-radius: 999px; white-space: nowrap; background: var(--accent-soft); color: var(--accent); }
 .chip.due { background: var(--warn-soft); color: var(--warn); }
-.chip.for { background: var(--rec-soft); color: var(--rec); }
+.chip.for { background: var(--accent-soft); color: var(--accent); }
+/* A question someone else decides wears yellow wherever the viewer's own wear green, and says whose it is in solid
+   yellow: the designer answered God Game's G116, for the owner, three times (the owner, 23 October). */
+.item.not-mine { --accent: var(--rec); --accent-soft: var(--rec-soft); border-color: var(--rec-line); }
+.item.not-mine.is-answered { border-left-color: var(--rec-line); }
+.item.not-mine .opt[aria-checked="true"] { border-color: var(--rec-line); box-shadow: inset 3px 0 0 var(--rec-line); }
+.item.not-mine .chip.for { background: var(--rec); color: var(--accent-ink); font-weight: 700; }
 .chip.low { background: transparent; border: 1px solid var(--line); color: var(--muted); }
 .priority { font-size: .86rem; color: var(--muted); }
 .label { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: .4rem; }
@@ -96,9 +103,9 @@ button.link { border: 0; background: none; padding: 0; color: var(--accent); tex
 .opt[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
 .opt-label { font-weight: 600; }
 .badge { display: inline-block; font-size: .66rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border-radius: 4px; padding: 0 .35rem; margin-left: .4rem; vertical-align: .1rem; color: var(--rec); background: var(--rec-soft); }
-.badge.second { color: var(--accent); background: var(--accent-soft); }
+.badge.second { color: var(--green); background: var(--green-soft); }
 .case { margin: 0; padding-left: 1.1rem; display: grid; gap: .1rem; font-size: .88rem; font-weight: 400; }
-.case .pro::marker { content: "+  "; color: var(--accent); font-family: var(--font-mono); }
+.case .pro::marker { content: "+  "; color: var(--green); font-family: var(--font-mono); }
 .case .con::marker { content: "−  "; color: var(--warn); font-family: var(--font-mono); }
 .opt-cost { font-size: .84rem; color: var(--muted); font-weight: 400; }
 .pick { max-width: 68ch; }
@@ -663,6 +670,7 @@ function updateItem(id, item, rank, openCount) {
   const interactive = open && Boolean(db) && Boolean(me) && !readOnly;
   const mine = myAnswer(id); const mineCurrent = mine && isCurrent(item, mine) ? mine : null;
   v.root.classList.toggle("is-answered", open && isAnswered(id));
+  v.root.classList.toggle("not-mine", Boolean(item.for) && !forMe(item));
   v.ref.textContent = item.ref || "";
   const isFold = isFolded(id, item);
   v.root.classList.toggle("is-collapsed", isFold);
