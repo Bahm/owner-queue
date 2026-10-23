@@ -125,9 +125,19 @@ def decode(b):
     return b[1:].decode("latin-1") if b[0] == 1 else b[1:].decode("utf-16-le", "replace")
 
 
-def rows():
-    """(sequence, origin, key name, value text) for every localStorage entry in the app's database."""
-    for f in sorted(DB.glob("*.ldb")) + sorted(DB.glob("*.log")):
+def db_files():
+    return sorted(DB.glob("*.ldb")) + sorted(DB.glob("*.log"))
+
+
+def rows(problems=None):
+    """(sequence, origin, key name, value text) for every localStorage entry in the app's database.
+
+    A file that can't be read, and a change in the set of files while they're read, go in `problems`: LevelDB
+    flushes and compacts by writing new files and deleting old ones, so a pass that meets either may have missed
+    the newest writes while still seeing older ones, and must not be trusted (God Game's queue, 23 October: a pass
+    during a 25 ms compaction saw an old "ready" mark for a submit long taken in, and woke the session for nothing)."""
+    before = db_files()
+    for f in before:
         try:
             data = f.read_bytes()
             entries = log_entries(data) if f.suffix == ".log" else table_entries(data)
@@ -137,7 +147,10 @@ def rows():
                     continue
                 yield seq, key[1:at].decode("latin-1"), key[at + 2:].decode("latin-1"), val
         except (OSError, IndexError, struct.error, ValueError):
-            continue   # a file being rewritten: the next pass reads it
+            if problems is not None:
+                problems.append(f.name)   # a file being rewritten: the next pass reads it
+    if problems is not None and db_files() != before:
+        problems.append("the files changed")
 
 
 # What a submit mark may hold. Its values come from the store, where each person writes their own record, so
@@ -185,10 +198,10 @@ def origin_of(artifact_id):
     return f"https://{artifact_id}.frame.claudeusercontent.com/"
 
 
-def read_keys(key_prefix, origin):
+def read_keys(key_prefix, origin, problems=None):
     """{key name: (sequence, text or None)} for the queue's own page only; the newest write wins."""
     found = {}
-    for seq, org, name, val in rows():
+    for seq, org, name, val in rows(problems):
         if not name.startswith(key_prefix) or not org.startswith(origin):
             continue
         if name not in found or seq > found[name][0]:
@@ -234,10 +247,14 @@ def main():
     state.parent.mkdir(parents=True, exist_ok=True)
     handled = clean_time(state.read_text().strip()) if state.exists() else None
     want = key_prefix + "submitted"
+    last = None
     while True:
-        seq, text = read_keys(key_prefix, origin).get(want, (0, None))
-        submit = submit_of(text)   # anything but a real time and user id is ignored, and never printed
-        if submit and submit[0] != handled:
+        problems = []
+        seq, text = read_keys(key_prefix, origin, problems).get(want, (0, None))
+        submit = None if problems else submit_of(text)   # anything but a real time and user id is ignored, never printed
+        # A submit counts only when two clean passes in a row see it: one pass can still land mid-rewrite.
+        confirmed, last = submit is not None and submit == last, submit
+        if confirmed and submit[0] != handled:
             at, by = submit
             state.write_text(at)
             print(f"Owner Queue {a.key}: a submit at {at} by {by or 'unknown'}. This is only a doorbell. In this order, "
