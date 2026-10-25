@@ -87,8 +87,9 @@ class PageTest(unittest.TestCase):
         cls.browser.close()
         cls.pw.stop()
 
-    def open(self, data=None, cfg=None, width=1000, height=900, url=None):
-        self.ctx = self.browser.new_context(viewport={"width": width, "height": height}, timezone_id=getattr(self, "ctx_tz", "UTC"))
+    def open(self, data=None, cfg=None, width=1000, height=900, url=None, touch=False):
+        self.ctx = self.browser.new_context(viewport={"width": width, "height": height}, timezone_id=getattr(self, "ctx_tz", "UTC"),
+                                            is_mobile=touch, has_touch=touch)
         boot = ("if (window === window.top && !sessionStorage.getItem('__mockdb')) {"
                 f"sessionStorage.setItem('__mockdb', {json.dumps(json.dumps(data if data is not None else seed()))});"
                 f"sessionStorage.setItem('__mockcfg', {json.dumps(json.dumps(cfg or {}))}); }}")
@@ -592,6 +593,58 @@ class PageTest(unittest.TestCase):
         p.evaluate("document.getElementById('frame').style.height = (parseFloat(document.getElementById('frame').style.height) + 300) + 'px'")
         p.wait_for_timeout(500)
         self.assertEqual(p.evaluate("scrollY"), scrolled, "once the viewer scrolls, a resize leaves the page where they put it")
+
+    def test_a_tap_on_a_phone_shows_the_question_under_the_link(self):
+        # On the owner's Android phone, links that jump went nowhere much of the time while the laptop's worked (the
+        # owner, 25 October, on God Game's G143). A tap shows the question under the link instead; "Go to" still jumps.
+        data = seed()
+        data["items/g2"]["choices"][0]["pros"] = ["Matches G7."]
+        data["items/g1"]["context"] = "<p>Depends on G4.</p><p>Second paragraph.</p>"
+        p = self.open(data, width=400, height=800, touch=True)
+        peek = p.locator("aside.peek")
+        link = p.locator("#item-g2 .opt[data-key='a'] a.qref", has_text="G7")
+        link.tap()
+        self.assertEqual(peek.count(), 1)
+        self.assertTrue(p.evaluate("document.querySelector(\"#item-g2 .opt[data-key='a']\").nextElementSibling.matches('aside.peek')"),
+                        "under the option the link is in")
+        for want in ("G7", "Old question", "Done", "Outcome: Shipped in v0.1.", "Go to G7"):
+            self.assertIn(want, peek.inner_text())
+        self.assertEqual(p.get_attribute("#item-g2 .opt[data-key='a']", "aria-checked"), "false", "the tap picks nothing")
+        self.assertFalse(p.evaluate("document.getElementById('done').open"), "and opens nothing")
+        p.evaluate("render()")
+        self.assertEqual(peek.count(), 1, "a render leaves it open")
+        link.tap()
+        self.assertEqual(peek.count(), 0, "a second tap closes it")
+        p.locator("#item-g1 .context a.qref", has_text="G4").tap()
+        self.assertTrue(p.evaluate("document.querySelector('#item-g1 .context > p').nextElementSibling.matches('aside.peek')"))
+        self.assertIn("not-mine", peek.get_attribute("class"), "someone else's question is yellow here too")
+        self.assertIn("For collaborators", peek.inner_text())
+        self.assertIn("Not answered yet.", peek.inner_text())
+        self.assertEqual(peek.locator("a").count(), 0, "no links inside a preview")
+        peek.get_by_role("button", name="Close").tap()
+        self.assertEqual(peek.count(), 0)
+        p.locator("#item-g1 .context a.qref", has_text="G4").tap()
+        p.keyboard.press("Escape")
+        self.assertEqual(peek.count(), 0, "Escape closes it")
+        p.locator("#item-g1 .context a.qref", has_text="G4").tap()
+        peek.get_by_role("button", name="Go to G4").tap(); p.wait_for_timeout(800)
+        self.assertEqual(peek.count(), 0)
+        self.assertTrue(p.evaluate("(() => { const r = document.getElementById('item-g4').getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight / 2; })()"))
+        p.evaluate("window.scrollTo(0, 0)")
+        p.locator("#item-g4 .refby a.qref", has_text="G1").tap()
+        self.assertTrue(p.evaluate("document.querySelector('#item-g4 .refby').nextElementSibling.matches('aside.peek')"))
+        self.assertIn("Question G1", peek.inner_text())
+
+    def test_a_long_jump_lands_at_once(self):
+        # Sliding the 29,000 px from God Game's G143 to G83 took 1.6 s, and a touch on the way stopped it short.
+        data = seed()
+        for ref in ("g2", "g3"):
+            data[f"items/{ref}"]["context"] = "<p>" + "Some background. " * 3000 + "</p>"
+        data["items/g1"]["context"] = "<p>Unlike G3.</p>"
+        p = self.open(data)
+        p.locator("#item-g1 .context a.qref", has_text="G3").click(); p.wait_for_timeout(50)
+        top = p.evaluate("document.getElementById('item-g3').getBoundingClientRect().top")
+        self.assertTrue(0 <= top < 450, f"G3 is {round(top)} px from the top 50 ms after the click")
 
     def test_plain_numbers_link_only_as_questions(self):
         asked = iso(60)

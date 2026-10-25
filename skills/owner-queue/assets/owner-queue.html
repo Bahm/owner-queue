@@ -84,6 +84,17 @@ button.link { border: 0; background: none; padding: 0; color: var(--accent); tex
 .item.not-mine .opt[aria-checked="true"] { border-color: var(--rec-line); box-shadow: inset 3px 0 0 var(--rec-line); }
 .item.not-mine .chip.for { background: var(--rec); color: var(--accent-ink); font-weight: 700; }
 .chip.low { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+/* A question number tapped on a phone opens a preview of that question under its line (the owner, 25 October). It
+   wears the colors of the question it shows, whatever the question it sits in wears. */
+.peek { --accent: var(--green); --accent-soft: var(--green-soft); display: grid; gap: .4rem; min-width: 0; padding: .6rem .75rem; border: 1px solid var(--accent); border-left-width: 4px; border-radius: 8px; background: var(--surface); color: var(--ink); font-size: .88rem; font-weight: 400; overflow-wrap: anywhere; }
+.peek > * { margin: 0; }
+.peek.not-mine { --accent: var(--rec); --accent-soft: var(--rec-soft); border-color: var(--rec-line); }
+.peek.not-mine .chip.whose { background: var(--rec); color: var(--accent-ink); font-weight: 700; }
+.peek-head { display: flex; gap: .5rem; align-items: baseline; }
+.peek-head strong { flex: 1 1 auto; min-width: 0; }
+.peek-head .ref, .peek-head button { flex: none; }
+.peek-ask { white-space: pre-line; font-weight: 500; }
+.peek-go { justify-self: start; }
 .priority { font-size: .86rem; color: var(--muted); }
 .label { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: .4rem; }
 .priority .label { color: var(--accent); }
@@ -149,7 +160,7 @@ button.fold::before { content: "▾"; display: inline-block; transition: transfo
 button.fold[aria-expanded="false"]::before { transform: rotate(-90deg); }
 .item-head h3 { cursor: pointer; }
 .item.is-collapsed { gap: .3rem; }
-.item.is-collapsed > :not(.item-head):not(.folded) { display: none !important; }
+.item.is-collapsed > :not(.item-head):not(.folded):not(.peek) { display: none !important; }
 .item:not(.is-collapsed) > .folded { display: none; }
 .folded { font-size: .86rem; color: var(--muted); padding-left: 1.85rem; overflow-wrap: anywhere; }
 .section-head h2 button.fold { margin-right: .15rem; vertical-align: .05rem; }
@@ -325,6 +336,7 @@ function labelFor(uid) {
 }
 function myAudience() { return isOwner ? "owner" : "collaborator"; }
 function forMe(item) { return !item.for || item.for === myAudience(); }
+function forLabel(item) { return item.for === myAudience() ? "For you" : item.for === "owner" ? "For the owner" : "For collaborators"; }
 async function refreshNames() {
   if (!userApi || !userApi.profiles) return;
   const ids = [...new Set([...people.keys(), ...answers.keys()])].filter((id) => id && id !== me);
@@ -438,7 +450,7 @@ function localTimes(root) {
 // A question's number anywhere in the page (G51; in a queue without a prefix, q224, #224 or "question 224") links to
 // that question, and each question lists the questions and For information entries that name it. Only numbers of
 // questions in the store link. Links are made here, after the allowlist, never from the store's HTML.
-const REF_SKIP = new Set(["a", "code", "pre", "kbd", "button", "textarea", "script", "style"]);
+const REF_SKIP = new Set(["a", "code", "pre", "kbd", "button", "textarea", "script", "style", "aside"]);   // aside: a preview
 let refIndex = { re: null, ids: new Map() };
 let refBy = new Map();              // itemId -> [{item} | {feed}, label]
 function buildRefIndex() {
@@ -497,20 +509,80 @@ function buildRefBy() {
   for (const [fid, f] of feedKept()) for (const t of refsIn(plainText(f.html))) add(t, { feed: fid, label: "For information, " + when(f.at) });
   refBy = by;
 }
+// Where a link goes. A tap on a phone opens a preview of the question under the link's line instead, so it needs no
+// scrolling: on the owner's Android phone, jumps went nowhere much of the time while the laptop's worked (the owner,
+// 25 October, on God Game's G143).
+function refEl(a) { return a.dataset.item ? $("item-" + a.dataset.item) : $("feed-" + a.dataset.feed); }
+function byTouch(event) { return event.pointerType ? event.pointerType !== "mouse" : matchMedia("(pointer: coarse)").matches; }
 document.addEventListener("click", (event) => {
   const a = event.target instanceof Element ? event.target.closest("a.qref") : null; if (!a) return;
   event.preventDefault();
-  const target = a.dataset.item ? $("item-" + a.dataset.item) : $("feed-" + a.dataset.feed); if (!target) return;
+  if (!refEl(a)) return;
+  if (byTouch(event)) togglePeek(a); else jump(a);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.querySelector("aside.peek")) closePeek(true); });
+function jump(a, fromTop = a.getBoundingClientRect().top) {
+  const target = refEl(a); if (!target) return;
   const fold = target.closest("details"); if (fold && !fold.open) fold.open = true;
   if (a.dataset.item && isFolded(a.dataset.item, items.get(a.dataset.item))) setFolds({ [a.dataset.item]: false });
   if (a.dataset.feed && folds["#feed"]) setFolds({ "#feed": false });
   target.style.scrollMarginTop = ($("bar").offsetHeight + 12) + "px";
-  target.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  // A long way goes at once: sliding the 29,000 px from God Game's G143 to G83 took 1.6 s, and a touch on the way
+  // stopped it short. Measured from the link, as a frame sized to the page is as tall as the page.
+  const far = Math.abs(target.getBoundingClientRect().top - fromTop) > 2 * Math.min(innerHeight, screen.height || innerHeight);
+  target.scrollIntoView({ block: "start", behavior: far || matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   followResizes(() => target.scrollIntoView({ block: "start" }));
   target.setAttribute("tabindex", "-1"); target.focus({ preventScroll: true });
   target.classList.remove("flash"); void target.offsetWidth; target.classList.add("flash");
   setTimeout(() => target.classList.remove("flash"), 1600);
-});
+}
+
+// The preview goes under the option, paragraph or list the link is in, at a level the next render leaves in place.
+const PEEK_SPOT = ".opt, .context > *, .item > *, .feed li, #lede, #others-anything-else";
+let peekLink = null;
+function closePeek(refocus) {
+  for (const n of document.querySelectorAll("aside.peek")) n.remove();
+  if (refocus && peekLink && peekLink.isConnected) peekLink.focus({ preventScroll: true });
+  peekLink = null;
+}
+function togglePeek(a) {
+  const spot = a.parentElement && (a.parentElement.closest(PEEK_SPOT) || a.parentElement); if (!spot) return;
+  const key = a.dataset.item ? "item:" + a.dataset.item : "feed:" + a.dataset.feed;
+  const next = spot.nextElementSibling, again = Boolean(next) && next.matches("aside.peek") && next.dataset.target === key;
+  closePeek(false);
+  if (again) return;
+  const peek = peekView(a); peek.dataset.target = key;
+  spot.after(peek); peekLink = a;
+  localTimes(peek);
+  peek.scrollIntoView({ block: "nearest" }); peek.focus({ preventScroll: true });
+}
+function peekView(a) {
+  const peek = el("aside", "peek"), head = el("div", "peek-head"), go = el("button", "peek-go"), close = el("button", "link", "Close");
+  peek.tabIndex = -1; go.type = close.type = "button";
+  const id = a.dataset.item, item = id ? items.get(id) : null;
+  if (item) {
+    peek.classList.toggle("not-mine", Boolean(item.for) && !forMe(item));
+    head.append(el("span", "ref", item.ref || ""), withCode(el("strong"), item.title || ""));
+    const status = el("p", "chips");
+    status.append(el("span", "chip", item.status === "done" ? "Done" : item.status === "waiting" ? "Scheduled" : "Open"));
+    if (item.for) status.append(el("span", "chip whose", forLabel(item)));
+    if (item.status === "done" && closedAt(item)) status.append(el("span", "stamp", when(closedAt(item))));
+    peek.append(head, status);
+    if (item.ask && item.ask !== item.title) peek.append(withCode(el("p", "peek-ask"), item.ask));
+    peek.append(withCode(el("p"), foldSummary(id, item)));
+    go.textContent = "Go to " + (item.ref || "the question");
+  } else {
+    const entry = refEl(a);
+    head.append(el("strong", "", a.textContent));
+    peek.append(head, el("p", "", clip(entry ? entry.textContent.trim() : "", 600)));
+    go.textContent = "Go to the entry";
+  }
+  head.append(close); peek.append(go);
+  peek.setAttribute("aria-label", "Preview of " + (item ? [item.ref, item.title].filter(Boolean).join(" ") : a.textContent));
+  close.addEventListener("click", () => closePeek(true));
+  go.addEventListener("click", () => { const top = go.getBoundingClientRect().top; closePeek(false); jump(a, top); });
+  return peek;
+}
 
 // A host that sizes this frame to the page, scrolling itself instead of the frame, grows the frame only after a link
 // has opened Done or unfolded its target, and that undoes the scroll (the owner, 23 October, on God Game's G111). So for
@@ -681,7 +753,7 @@ function updateItem(id, item, rank, openCount) {
   if (changedKey(v, "title", item.title)) { v.title.replaceChildren(); withCode(v.title, item.title || ""); }
   v.chips.replaceChildren();
   if (open && k[item.group]) v.chips.append(el("span", "chip", k[item.group]));
-  if (item.for) v.chips.append(el("span", "chip for", item.for === myAudience() ? "For you" : item.for === "owner" ? "For the owner" : "For collaborators"));
+  if (item.for) v.chips.append(el("span", "chip for", forLabel(item)));
   if (item.lowPriority) v.chips.append(el("span", "chip low", "low priority"));
   if (item.due && open) v.chips.append(el("span", "chip due", item.due));
   if (item.status === "waiting") v.chips.append(el("span", "chip low", "scheduled"));

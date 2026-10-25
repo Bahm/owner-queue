@@ -96,7 +96,7 @@ Answers save as typed: choices at once, notes 0.8 s after the last keystroke, on
 
 ## Links between questions
 
-The page links every question number it finds in a question's text, notes, For information, the status line and panels: `G51` on a queue with a prefix; `q224`, `#224` or `question 224` on one without. Only numbers of questions in the store link, and never inside `code`, `pre`, links or buttons. A click scrolls to the question, opening Done if it's there. Each question shows "Referenced by": the questions and For information entries (last 48 hours) that name it. Put what the reader needs inside the question anyway; a link is a jump, and `Q ask` warns when a context is mostly a pointer.
+The page links every question number it finds in a question's text, notes, For information, the status line and panels: `G51` on a queue with a prefix; `q224`, `#224` or `question 224` on one without. Only numbers of questions in the store link, and never inside `code`, `pre`, links or buttons. A click scrolls to the question, opening Done if it's there; a long way goes at once, a short one slides. A tap on a phone or tablet scrolls nothing: it opens a preview of the question under the link's line (number, title, status, whose it is, the question, the answers or outcome), with "Go to" for the whole card. A second tap, Close or Escape closes it. Each question shows "Referenced by": the questions and For information entries (last 48 hours) that name it. Put what the reader needs inside the question anyway; a link is a jump, and `Q ask` warns when a context is mostly a pointer.
 
 ## Times
 
