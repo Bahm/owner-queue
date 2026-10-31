@@ -14,6 +14,7 @@ ${XDG_CACHE_HOME:-~/.cache}/owner-queue/<slug>/state.json.
                          [--delegate "WHAT COLLABORATORS MAY DECIDE"] [--undelegate]
                          [--unsafe-unattended-wake] [--unsafe-collaborator-wake] [--safe] [--version N]
     queue.py ask SLUG ITEM.json [--version N] [--reask]   add a question, or change one
+                         a re-ask also takes --answers DIR with --reply [UID=]TEXT, or --no-reply
     queue.py close SLUG ID --outcome TEXT [--undo TEXT] --version N
     queue.py wait SLUG ID [--due TEXT] --version N
     queue.py fyi SLUG HTML|@FILE                  a "For information" entry, stamped now
@@ -34,6 +35,8 @@ TOKEN = "__QUEUE_TITLE__"
 FREE_ID = "anything-else"
 CLOSED_FIELDS = ("takenAt", "order", "outcome", "undo")
 FEED_HOURS = 48
+REPLY_MAX = 300   # a reply to the note that led to a re-ask: one or two plain sentences (the owner, roc-ui's question 326)
+FEATURES = re.compile(r"<!-- owner-queue page features: ([a-z ,-]*) -->")   # what a page can show, so the script knows
 BATCH_MAX = 50
 CAP = 256 * 1024
 RULES = [
@@ -135,7 +138,7 @@ def records(value):
 # The fields the page reads (a test keeps these in step with the page), and the misnamings seen so far.
 ITEM_FIELDS = {"ref", "id", "title", "ask", "context", "status", "group", "for", "choices", "secondOpinion", "pick", "priority",
                "priorityReason", "lowPriority", "askedAt", "due", "effort", "cost", "undo", "unblocks", "outcome", "read",
-               "takenAt", "order", "needs", "steps", "prompt", "input", "source", "history"}
+               "reasked", "takenAt", "order", "needs", "steps", "prompt", "input", "source", "history"}
 CHOICE_FIELDS = {"key", "label", "primary", "pros", "cons", "cost"}
 STEP_FIELDS = {"text", "command"}
 LIST_FIELDS = {"choices": '{"key": "a", "label": "…"}', "steps": '{"text": "…"}', "history": '{"who": "…", "note": "…", "at": "…"}'}
@@ -371,7 +374,16 @@ def render(state, force=True):
         die(f"{out} already exists.")
     out.write_text(template.replace(TOKEN, html.escape(html.unescape(state["title"]))), encoding="utf-8")
     state["renderedTemplate"] = template_id()
+    m = FEATURES.search(template)
+    # Keyed by the template, so a page published by an older copy of this script never counts as having them.
+    known = {k: v for k, v in (state.get("pageFeatures") or {}).items() if k == state.get("publishedTemplate")}
+    state["pageFeatures"] = {**known, template_id(): sorted(f for f in re.split(r"[ ,]+", m.group(1)) if f) if m else []}
     return out
+
+
+def page_has(state, feature):
+    """Whether the page this queue last published (as `published` or `bind` recorded it) shows `feature`."""
+    return feature in (state.get("pageFeatures") or {}).get(state.get("publishedTemplate") or "", [])
 
 
 def cmd_init(a):
@@ -393,8 +405,8 @@ def cmd_init(a):
         "configVersion": None,
     }
     state["config"]["queueKey"] = state["queueKey"]
-    save_state(state)
     page = render(state)
+    save_state(state)   # with the template it rendered, which `bind` records as published
     print(f"Queue '{slug}' started in {folder}.")
     print(f"1. Publish {page} with the Artifact tool: icon \"checklist\", a one-sentence description, and capabilities:")
     print(json.dumps(CAPABILITIES))
@@ -409,6 +421,8 @@ def cmd_bind(a):
     state["config"]["owner"] = a.owner
     if a.version and a.version not in state["publishedVersions"]:
         state["publishedVersions"].append(a.version)
+    if a.version and state.get("renderedTemplate"):
+        state["publishedTemplate"] = state["renderedTemplate"]   # the first publish is of the page init rendered
     save_state(state)
     out = Out(state, "config")
     out.add("set", "config", "page", state["config"], state.get("configVersion"))
@@ -511,6 +525,94 @@ def next_ref(state):
     return ref
 
 
+def reask_reply(state, a, doc_id, item, errors, warnings):
+    """A re-ask after a note opens with that note and Claude's reply to it, for whoever wrote it (the owner, roc-ui's
+    question 326: "answers to previous notes being hard to spot"). The page quotes the note from its writer's own answer,
+    so nothing here can misquote it; the reply is tied to that answer's time, so a newer note hides it. Returns the
+    item's new `reasked` map, or None to leave it as it is. On a queue whose published page can't show the reply yet,
+    what would be refused only warns."""
+    ref = item.get("ref") or doc_id
+    shown = page_has(state, "reasked")
+    problems = errors if shown else warnings
+    later = "" if shown else (" Not refused yet: this queue's published page predates the box that shows the reply. Once the "
+                              "session that owns it republishes it (`queue.py render`, Artifact publish, `queue.py published`), it is.")
+    named, plain = {}, []   # --reply UID=TEXT for one person's note; --reply TEXT for every note it answers
+    for text in a.reply or []:
+        m = re.fullmatch(r"(u_[A-Za-z0-9_-]{1,64})=(.*)", text, re.S)
+        if m:
+            named[m.group(1)] = m.group(2).strip()
+        else:
+            plain.append(text.strip())
+    if len(plain) > 1:
+        errors.append(f"{ref}: {len(plain)} replies for everyone. Give one --reply TEXT, or one --reply UID=TEXT for each person's note.")
+    for text in [*plain, *named.values()]:
+        if not text:
+            errors.append(f"{ref}: a --reply is empty. Answer the note in one or two plain sentences, or pass --no-reply.")
+        elif len(text) > REPLY_MAX:
+            problems.append(f"{ref}: a reply is {len(text)} characters, over {REPLY_MAX}. Answer the note in one or two plain sentences: "
+                            "what changed, or why not; the rest belongs in the question." + later)
+        else:
+            lint_times(f"{ref} reply", [text], warnings)
+    if not a.answers:
+        if not a.no_reply:
+            problems.append(f"{ref}: a re-ask needs --answers DIR, the folder the answers were listed into, to find the note that led to it, "
+                            "with --reply \"…\" answering that note; or --no-reply when no note led to it or it asks nothing." + later)
+        return None
+    root = Path(a.answers)
+    before = read_dir(root, "items").get(doc_id)
+    if before is None:
+        die(f"No items/{doc_id} under {root}: list `items`, `people` and each `people/<uid>/answers` with out_dir {root} first.")
+    if not (root / "people").is_dir():
+        die(f"No people under {root}, so it can't see the notes: list `people` and each `people/<uid>/answers` with out_dir {root} "
+            "first. If nobody has answered on this queue yet, pass --no-reply instead of --answers.")
+    uids, missing = answer_uids(root)
+    if missing:
+        die("List these with out_dir " + str(root) + " first: " + ", ".join(f"people/{u}/answers" for u in missing))
+    owner, people = state.get("owner"), read_dir(root, "people")
+    answers = {uid: read_dir(root, f"people/{uid}/answers").get(doc_id) for uid in uids}
+    answers = {uid: ans for uid, ans in answers.items() if isinstance(ans, dict)}
+    decider, since = item.get("for", before.get("for")), str(before.get("askedAt") or "")
+    notes = {}   # uid -> the time of their note in the round this re-ask ends, as `answers` would list it
+    for uid, ans in answers.items():
+        at = real_time(ans.get("at")) if str(ans.get("note", "")).strip() else None
+        if at and at >= since and finished(uid, ans, owner, people, a.unsubmitted or ()):
+            notes[uid] = at
+    theirs = {uid: at for uid, at in notes.items() if not decider or (decider == "owner") == (uid == owner)}
+    who = lambda uids: ", ".join("the owner" if uid == owner else f"a collaborator ({uid})" for uid in sorted(uids, key=lambda u: (u != owner, u)))
+    if a.no_reply:
+        if theirs:
+            warnings.append(f"{ref}: --no-reply, so the note from {who(theirs)}, whom it's for, gets no answer at the top of the "
+                            "question. That's right only if it asks nothing.")
+        return None
+    stray = [uid for uid in named if uid not in notes]
+    if stray:
+        errors.append(f"{ref}: --reply for {who(stray)}, who wrote no note since it was asked.")
+    targets = {**(theirs or (notes if plain else {})), **{uid: notes[uid] for uid in named if uid in notes}}
+    unanswered = [uid for uid in theirs if uid not in named and not plain]
+    if unanswered:
+        problems.append(f"{ref}: asked again after a note from {who(unanswered)}, whom it's for. Answer the note with --reply \"…\": "
+                        "one or two plain sentences, shown under their note at the top of the question. Pass --no-reply only if it "
+                        "asks nothing." + later)
+    if (plain or named) and not notes:
+        errors.append(f"{ref}: --reply, but nobody wrote a note since it was asked, so there's nothing for it to answer.")
+    shared = [uid for uid in targets if uid not in named]
+    if plain and len(shared) > 1:
+        warnings.append(f"{ref}: the same reply shows under each note from {who(shared)}. If they asked different things, give each "
+                        "its own with --reply UID=TEXT.")
+    replies = {uid: named.get(uid) or (plain[0] if plain else "") for uid in targets}
+    replies = {uid: text for uid, text in replies.items() if text}
+    if not replies:
+        return None
+    if not shown:
+        warnings.append(f"{ref}: the reply is stored, but this queue's published page doesn't show it until the session that owns "
+                        "it republishes it.")
+    current = {uid: real_time(ans.get("at")) for uid, ans in answers.items()}
+    earlier = before.get("reasked") if isinstance(before.get("reasked"), dict) else {}
+    kept = {uid: mark for uid, mark in earlier.items()   # an earlier reply stays while its note does
+            if isinstance(mark, dict) and uid not in replies and current.get(uid) and current[uid] == mark.get("answerAt")}
+    return {**kept, **{uid: {"answerAt": targets[uid], "reply": text} for uid, text in replies.items()}}
+
+
 def cmd_ask(a):
     state = load_state(a.slug)
     path = Path(a.file)
@@ -538,12 +640,20 @@ def cmd_ask(a):
         state.setdefault("ids", {})[str(item["ref"]).lower()] = doc_id   # ask, close and wait find it by its ref
     if new or a.reask:
         item["askedAt"] = stamp()
+    if (a.reply or a.no_reply or a.answers or a.unsubmitted) and not (a.reask and not new):
+        die("--answers, --reply, --no-reply and --unsubmitted go with --reask and --version: they answer the note that led to a re-ask.")
+    if "reasked" in item:
+        die(f"{item.get('ref') or doc_id}: `reasked` is written by `ask --reask --reply`, tied to the note it answers. Take it out of the file.")
     if a.reask and not new:
         item.setdefault("status", "open")
         if item["status"] != "done":
             for field in CLOSED_FIELDS:
                 item.setdefault(field, {"__delete__": True})
     errors, warnings = lint_item(item, state)
+    if a.reask and not new:
+        marks = reask_reply(state, a, doc_id, item, errors, warnings)
+        if marks is not None:
+            item["reasked"] = marks
     if not new and not a.reask and "status" in item:
         # A plain edit merges the file's status as it is: "open" on a closed question puts it back with its old
         # outcome, nobody having asked it again (xbahm's finding; the owner's O19).
@@ -565,7 +675,8 @@ def cmd_ask(a):
             note = f" Numbered {numbered}; add \"ref\": \"{numbered}\" to {path.name} before running ask on it again."
     out = Out(state, "ask-" + doc_id)
     out.add("set" if new else "update", "items", doc_id, item, a.version)
-    out.emit(f"Item {item.get('ref') or doc_id} → items/{doc_id}." + note + (" Answers given before now show under Previous answers." if a.reask else ""))
+    out.emit(f"Item {item.get('ref') or doc_id} → items/{doc_id}." + note + (" Answers given before now show under Previous answers." if a.reask else "") +
+             (" Whoever wrote a note it answers sees it with your reply at the top." if item.get("reasked") and a.reply else ""))
 
 
 def cmd_close(a):
@@ -633,6 +744,13 @@ def read_dir(root, collection):
             continue
         docs[f.stem] = body.get("data", body) if isinstance(body, dict) and set(body) >= {"data"} and "id" in body else body
     return docs
+
+
+def answer_uids(root):
+    """Everyone with answers under a listing, and those whose answers it doesn't hold yet."""
+    uids = sorted(u for u in set(read_dir(root, "people")) | {p.name for p in (Path(root) / "people").glob("u_*") if p.is_dir()}
+                  if REAL_UID.fullmatch(u))
+    return uids, [u for u in uids if not (Path(root) / "people" / u / "answers").is_dir()]
 
 
 def finished(uid, ans, owner, people, anyway=()):
@@ -717,10 +835,9 @@ def cmd_take_in(a):
     root = Path(a.dir)
     items, people, receipts = read_dir(root, "items"), read_dir(root, "people"), read_dir(root, "receipts")
     owner = state.get("owner")
-    uids = sorted(u for u in set(people) | {p.name for p in (root / "people").glob("u_*") if p.is_dir()} if REAL_UID.fullmatch(u))
+    uids, missing = answer_uids(root)
     if not items:
         die(f"No items under {root}/items: list `items`, `people`, `receipts` and each `people/<uid>/answers` with out_dir {root} first.")
-    missing = [u for u in uids if not (root / "people" / u / "answers").is_dir()]
     if missing:
         die("List these with out_dir " + str(root) + " first: " + ", ".join(f"people/{u}/answers" for u in missing))
     free_versions = dict(pair.partition("=")[::2] for pair in a.free or [])
@@ -810,7 +927,8 @@ def cmd_take_in(a):
         print("Answered by someone who doesn't decide them, left open as input and marked read on the page: " + ", ".join(inputs) +
               ". Answer a question asked in such a note with --reply REF=TEXT.")
     out.emit("Send this batch before anything else. Then act on the answers (queue.py answers lists them). Re-ask "
-             "(ask --reask) any question whose answer leaves it open, and turn a note asking for more into a new question. "
+             f"(ask --reask --answers {root}) any question whose answer leaves it open, with --reply \"…\" answering the note that "
+             "led to it, if one did, and turn a note asking for more into a new question. "
              "What you'll do about an answer goes in its outcome (--outcome), not under For information.")
 
 
@@ -1071,7 +1189,14 @@ def main():
     p.add_argument("--undelegate", action="store_true", help="end the standing permission")
     p.add_argument("--safe", action="store_true"); p.add_argument("--version", type=int); p.set_defaults(fn=cmd_config)
     p = sub.add_parser("ask"); p.add_argument("slug"); p.add_argument("file"); p.add_argument("--version", type=int)
-    p.add_argument("--reask", action="store_true"); p.add_argument("--id"); p.set_defaults(fn=cmd_ask)
+    p.add_argument("--reask", action="store_true"); p.add_argument("--id")
+    p.add_argument("--answers", metavar="DIR", help="with --reask: the folder the answers were listed into, to find the note that led to it")
+    replied = p.add_mutually_exclusive_group()
+    replied.add_argument("--reply", action="append", metavar="[UID=]TEXT",
+                         help=f"with --reask: one or two plain sentences answering that note, at most {REPLY_MAX} characters; UID= for one person's")
+    replied.add_argument("--no-reply", action="store_true", help="with --reask: no note led to it, or the note asks nothing")
+    p.add_argument("--unsubmitted", action="append", metavar="UID", help="with --reask: count that collaborator's notes saved since their last Submit, as take-in did")
+    p.set_defaults(fn=cmd_ask)
     p = sub.add_parser("close"); p.add_argument("slug"); p.add_argument("id"); p.add_argument("--outcome", required=True)
     p.add_argument("--undo"); p.add_argument("--version", type=int, required=True); p.set_defaults(fn=cmd_close)
     p = sub.add_parser("wait"); p.add_argument("slug"); p.add_argument("id"); p.add_argument("--due")

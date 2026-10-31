@@ -323,6 +323,88 @@ class PageTest(unittest.TestCase):
         self.assertIn("Not yet: it waits on the owner.", self.text("#item-g3 .others"))
         self.assertEqual(self.errors, [])
 
+    def reasked_seed(self):
+        data = seed()
+        at, asked = iso(90), iso(60)
+        data["items/g1"]["reasked"] = {"u_owner": {"answerAt": at, "reply": "The context now names the build: 2.16.0."}}
+        data["items/g2"]["reasked"] = {"u_owner": {"answerAt": iso(120), "reply": "Answers an older note."}}
+        data["items/g3"]["reasked"] = {"u_owner": {"answerAt": iso(5), "reply": "Tied to a current answer."}}
+        data["items/g7"].update({"askedAt": asked, "takenAt": iso(3), "reasked": {"u_owner": {"answerAt": at, "reply": "Closed since."}}})
+        data["people/u_owner"] = {"lastAnswerAt": at}
+        for ref, when in (("g1", at), ("g2", at), ("g3", data["items/g3"]["reasked"]["u_owner"]["answerAt"]), ("g7", at)):
+            data[f"people/u_owner/answers/{ref}"] = {"choice": "", "choiceLabel": "", "note": f"Which build was that, {ref}?", "at": when}
+        return data
+
+    def test_a_reask_after_your_note_opens_with_the_reply(self):
+        # The owner on roc-ui's question 326: answers to earlier notes were hard to spot, folded under Previous answers. A
+        # question asked again after someone's note opens, for them, with that note, from their own answer, and the reply.
+        data = self.reasked_seed()
+        reply = data["items/g1"]["reasked"]["u_owner"]["reply"]
+        p = self.open(data)
+        box = p.locator("#item-g1 .reask")
+        self.assertTrue(box.is_visible())
+        for want in ("Asked again after your note on", "You:", "“Which build was that, g1?”", "Claude: " + reply):
+            self.assertIn(want, box.inner_text())
+        self.assertTrue(p.evaluate("(() => { const b = document.querySelector('#item-g1 .reask');"
+                                   " return b.previousElementSibling.matches('.ask') && b.nextElementSibling.matches('.context'); })()"),
+                        "between the question and its context")
+        self.assertEqual(p.evaluate("getComputedStyle(document.querySelector('#item-g1 .reask .reply')).borderLeftStyle"), "solid",
+                         "styled as a reply to a collaborator's note is")
+        self.assertEqual(p.locator("#item-g1 .history .reply").count(), 0, "shown once, not again under Previous answers")
+        self.assertTrue(p.locator("#item-g2 .reask").is_hidden(), "a reply to an older note than theirs shows nothing")
+        self.assertTrue(p.locator("#item-g3 .reask").is_hidden(), "nor one tied to a current answer")
+        p.locator("#item-g1 button.fold").click()
+        self.assertIn("Asked again after your note. Claude: “" + reply + "”", p.locator("#item-g1 .folded").inner_text())
+        p.locator("#item-g1 button.fold").click()
+        p.click("#done-summary"); p.click("#item-g7 button.fold"); p.click("#item-g7 details.history > summary")
+        self.assertTrue(p.locator("#item-g7 .reask").is_hidden(), "not on a closed question")
+        self.assertTrue(p.evaluate("(() => { const l = [...document.querySelectorAll('#item-g7 .history .answer-line')].find((n) => n.textContent.includes('You:'));"
+                                   " return Boolean(l) && l.nextElementSibling.matches('.read-line') && l.nextElementSibling.textContent.includes('Closed since.'); })()"),
+                        "there, the reply sits under their note in Previous answers")
+        p.evaluate("window.__mock.set('people/u_owner/answers/g1', {choice: 'a', choiceLabel: 'G1 option A', note: 'From my phone.', at: new Date().toISOString()})")
+        p.wait_for_timeout(150)
+        self.assertTrue(box.is_hidden(), "a newer note hides the old reply")
+        p.locator("#item-g1 button.fold").click()
+        self.assertNotIn("Asked again", p.locator("#item-g1 .folded").inner_text())
+        self.ctx.close()
+        p = self.open(data, cfg={"me": "u_des", "isOwner": False})
+        self.assertTrue(p.locator("#item-g1 .reask").is_hidden(), "the box is for the note's writer")
+        p.click("#item-g1 details.history > summary")
+        self.assertTrue(p.evaluate("(() => { const l = [...document.querySelectorAll('#item-g1 .history .answer-line')].find((n) => n.textContent.includes('The owner:'));"
+                                   " return Boolean(l) && l.nextElementSibling.textContent.includes('Claude: " + reply + "'); })()"),
+                        "everyone else sees the reply under that note")
+        p.locator("#item-g1 button.fold").click()
+        self.assertIn("Asked again after the owner's note. Not answered yet.", p.locator("#item-g1 .folded").inner_text())
+        self.ctx.close()
+        p = self.open(data, cfg={"me": None})
+        self.assertTrue(p.locator("#item-g1 .reask").is_hidden(), "a view with no identity has no box")
+        p.click("#item-g1 details.history > summary")
+        self.assertIn("Claude: " + reply, self.text("#item-g1 .history"))
+        self.assertEqual(self.errors, [])
+
+    def test_answering_under_the_reply_never_moves_the_card(self):
+        # A reviewer's finding: once a new note had saved, the box went the moment the note box lost focus, between the
+        # mousedown and mouseup of a click on an option, and the pick was lost. Answered on this page, it stays put.
+        p = self.open(self.reasked_seed())
+        box, a = p.locator("#item-g1 .reask"), p.locator("#item-g1 .opt[data-key='a']")
+        p.fill("#note-g1", "Thanks, then")
+        p.wait_for_timeout(1200)
+        top = a.bounding_box()["y"]
+        p.locator("#note-g1").press_sequentially(" A.")
+        a.click()
+        p.wait_for_timeout(1200)
+        saved = self.store("people/u_owner/answers/g1")
+        self.assertEqual((saved["choice"], saved["note"]), ("a", "Thanks, then A."), "the pick lands")
+        self.assertEqual(a.bounding_box()["y"], top, "and nothing above it moved")
+        self.assertTrue(box.is_visible(), "the box stays while they're here")
+        b = p.locator("#item-g2 .opt[data-key='b']")
+        top = b.bounding_box()["y"]
+        p.evaluate("render()")
+        self.assertEqual(b.bounding_box()["y"], top)
+        p.reload(); p.wait_for_selector("#section-open", state="attached"); p.wait_for_timeout(300)
+        self.assertTrue(box.is_hidden(), "and goes at the next load: the note it answered is gone")
+        self.assertEqual(self.errors, [])
+
     def test_long_notes_show_their_start(self):
         report = "\n".join(f"line {n}: the bot stood still at 120 64 -30" for n in range(1, 1036))
         data = seed()

@@ -1,4 +1,5 @@
 <title>__QUEUE_TITLE__</title>
+<!-- owner-queue page features: reasked -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -138,8 +139,9 @@ textarea.has-text { border-color: var(--accent); }
 .answer-line .who { font-weight: 600; }
 .answer-line .said { white-space: pre-wrap; overflow-wrap: anywhere; }
 .answer-line .said button.link { margin-left: .3rem; white-space: nowrap; }
-.read-line { font-size: .84rem; color: var(--muted); display: grid; gap: .15rem; }
-.read-line .reply { color: var(--ink); border-left: 3px solid var(--accent); padding-left: .55rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.read-line, .reask { font-size: .84rem; color: var(--muted); display: grid; gap: .15rem; }
+.read-line .reply, .reask .reply { color: var(--ink); border-left: 3px solid var(--accent); padding-left: .55rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reask .answer-line { color: var(--ink); }
 details.history > summary { cursor: pointer; font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 details.history[open] > summary { margin-bottom: .2rem; }
 .stamp { font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -256,6 +258,7 @@ const views = new Map();            // itemId -> view
 const pending = new Map();          // itemId -> timer, for my unsaved notes
 const drafts = new Map();           // itemId -> draft not yet confirmed by the store
 const saving = new Set();           // itemIds with a save under way
+const answeredHere = new Set();     // itemIds this viewer answered on this page since it loaded
 let names = {};                     // uid -> display label
 let loaded = { items: false, config: false, feed: false };
 let firstContent = true, pingOn = false, audio = null;
@@ -396,7 +399,15 @@ function readMark(item, uid, a) { const r = isObj(item.read) && isObj(item.read[
 function readLines(target, r, decider, mine) {
   const line = el("p", "", (mine ? "Claude read your note on " : "Read on ") + when(r.at) + (decider ? "; " + decider + " decides this one." : "."));
   target.append(line);
-  if (r.reply) { const reply = el("p", "reply"); reply.append(el("span", "who", "Claude: ")); reply.append(said(r.reply, "reply|" + r.at, false)); target.append(reply); }
+  if (r.reply) target.append(replyLine(r.reply, "reply|" + r.at));
+}
+function replyLine(text, key) { const p = el("p", "reply"); p.append(el("span", "who", "Claude: "), said(text, key, false)); return p; }
+// A question asked again after someone's note opens, for them, with that note and Claude's reply to it (the owner, on
+// roc-ui's question 326: answers to earlier notes were hard to spot). The note comes from their own answer, never from
+// Claude, and the reply holds only while that answer is still the one it answers: a newer note hides it.
+function reaskMark(item, uid, a) {
+  const r = isObj(item.reasked) && isObj(item.reasked[uid]) ? item.reasked[uid] : null;
+  return r && r.reply && a && String(a.note || "").trim() && String(r.answerAt) === String(a.at) && !isCurrent(item, a) ? r : null;
 }
 function clip(text, n) { return text.length > n ? text.slice(0, n - 1) + "…" : text; }
 function foldSummary(id, item) {
@@ -410,7 +421,12 @@ function foldSummary(id, item) {
   const note = cur && String(cur.note || "").trim();
   if (choice || note) return "Your answer: " + [choice, note ? "“" + clip(note, 80) + "”" : ""].filter(Boolean).join(" ");
   const others = currentAnswers(item, id).filter(([uid]) => uid !== me);
-  return others.length ? "Answered by " + others.map(([uid]) => labelFor(uid)).join(", ") + "." : "Not answered yet.";
+  const by = others.length ? "Answered by " + others.map(([uid]) => labelFor(uid)).join(", ") + "." : "";
+  const again = me ? reaskMark(item, me, answerOf(me, id)) : null;
+  if (again) return ["Asked again after your note. Claude: “" + clip(String(again.reply).trim(), 80) + "”", by].filter(Boolean).join(" · ");
+  const after = [...answers].find(([uid, map]) => uid !== me && reaskMark(item, uid, map.get(id)));
+  const whose = after ? (after[0] === config.owner ? "the owner" : names[after[0]] || "a collaborator") : "";
+  return (whose ? "Asked again after " + whose + "'s note. " : "") + (by || "Not answered yet.");
 }
 
 // ---- times in the viewer's zone ----------------------------------------------------
@@ -662,6 +678,7 @@ async function touchPerson(extra) {
 }
 async function saveMine(id, body, fromDraft) {
   if (!body.at) body.at = nowIso();
+  answeredHere.add(id);
   drafts.set(id, body); store(draftKey(id), body);
   render();
   if (!db || !me || readOnly) return;
@@ -703,7 +720,7 @@ function itemView(id) {
   const fold = el("button", "fold"); fold.type = "button";
   head.append(fold, ref, title, chips);
   const folded = el("p", "folded");
-  const priority = el("p", "priority"), ask = el("p", "ask"), context = el("div", "context");
+  const priority = el("p", "priority"), ask = el("p", "ask"), reask = el("div", "reask"), context = el("div", "context");
   const opts = el("div", "opts"); opts.setAttribute("role", "radiogroup");
   const pick = el("p", "pick"), meta = el("dl", "meta"), needs = el("div", "context"), steps = el("ol", "steps"), prompt = el("div");
   const boxLabel = el("label", "box-label"), noteText = el("span"), clear = el("button", "link", "Clear my answer");
@@ -712,8 +729,8 @@ function itemView(id) {
   const saved = el("div", "saved"); saved.id = "saved-" + id;
   const readLine = el("div", "read-line");
   const others = el("div", "others"), history = el("details", "history"), source = el("p", "source"), refby = el("p", "refby");
-  root.append(head, folded, priority, ask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, note, saved, readLine, others, history, source);
-  v = { root, fold, folded, ref, title, chips, priority, ask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, noteText, clear, note, saved, readLine, others, history, source, keys: {} };
+  root.append(head, folded, priority, ask, reask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, note, saved, readLine, others, history, source);
+  v = { root, fold, folded, ref, title, chips, priority, ask, reask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, noteText, clear, note, saved, readLine, others, history, source, keys: {} };
   const toggle = () => setFolds({ [id]: !isFolded(id, items.get(id)) });
   fold.addEventListener("click", toggle);
   title.addEventListener("click", (e) => { if (!(e.target instanceof Element && e.target.closest("a"))) toggle(); });
@@ -764,6 +781,18 @@ function updateItem(id, item, rank, openCount) {
   v.priority.hidden = !rank;
   if (changedKey(v, "ask", item.ask)) { v.ask.replaceChildren(); withCode(v.ask, item.ask || ""); }
   v.ask.hidden = !item.ask || item.ask === item.title;
+  // Asked again after the viewer's note: their note and Claude's reply, between the question and its context. Once they
+  // answer again on this page it stays where it is, so the card never moves under a click or a tap (a reviewer's finding:
+  // a box gone between mousedown and mouseup lost the pick). Otherwise a newer answer removes it, and the next load does.
+  const stored = me ? answerOf(me, id) : null, again = item.status !== "done" ? reaskMark(item, me, stored) : null;
+  const shown = again ? { note: stored.note, at: stored.at, reply: again.reply } : item.status !== "done" && answeredHere.has(id) ? v.reaskShown : null;
+  v.reaskShown = shown || null;
+  v.reask.replaceChildren();
+  if (shown) {
+    const yours = el("p", "answer-line"); yours.append(el("span", "who", "You:"), said(shown.note, id + "|asked-after|" + shown.at, true));
+    v.reask.append(el("p", "", "Asked again after your note on " + when(shown.at) + "."), yours, replyLine(shown.reply, id + "|asked-reply|" + shown.at));
+  }
+  v.reask.hidden = !shown;
   if (changedKey(v, "context", item.context)) setHtml(v.context, item.context || "");
   v.context.hidden = !item.context;
 
@@ -838,7 +867,7 @@ function updateItem(id, item, rank, openCount) {
   v.others.hidden = !v.others.childElementCount;
 
   const hist = arr(item.history).slice();
-  for (const [uid, map] of answers) { const a = map.get(id); if (a && !isCurrent(item, a) && (a.choice || a.note) && !hist.some((h) => h.at === a.at)) hist.push({ who: uid === me ? "You" : labelFor(uid), choiceLabel: a.choiceLabel || a.choice, note: a.note, at: a.at }); }
+  for (const [uid, map] of answers) { const a = map.get(id); if (a && !isCurrent(item, a) && (a.choice || a.note) && !hist.some((h) => h.at === a.at)) hist.push({ uid, who: uid === me ? "You" : labelFor(uid), choiceLabel: a.choiceLabel || a.choice, note: a.note, at: a.at }); }
   hist.sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
   v.history.replaceChildren(el("summary", "", "Previous answers (" + hist.length + ")"));
   for (const [i, h] of hist.entries()) {
@@ -848,6 +877,9 @@ function updateItem(id, item, rank, openCount) {
     if (h.choiceLabel) line.append(el("span", "", h.choiceLabel));
     if (String(h.note || "").trim()) line.append(said(h.note, id + "|prev|" + (h.at || i), true));
     v.history.append(line);
+    // Claude's reply to a note that led to a re-ask, for everyone else; its writer has it at the top while it's open.
+    const r = h.uid && !(h.uid === me && shown) ? reaskMark(item, h.uid, h) : null;
+    if (r) { const box = el("div", "read-line"); box.append(replyLine(r.reply, id + "|prev-reply|" + h.at)); v.history.append(box); }
   }
   v.history.hidden = !hist.length;
   v.source.textContent = item.source ? "Source: " + item.source : "";

@@ -37,7 +37,7 @@ If another command already uses the name, run it as `/owner-queue:owner-queue`.
 - **Scheduled**, **Anything else** (free text, as long as you like; it stays at the bottom of the screen while you read the questions), **For information** (Claude's status, 48 hours of it), and **Done**.
 - **A sticky bar** with progress, Submit answers, Ping me on updates (each queue can have its own sound), and Copy all answers.
 - **Other people:** answers from people you share the queue with show beside yours, under their claude.ai names. A question can say who decides it: you, or collaborators. A question for someone else is yellow where your own are green.
-- **Asking again:** when Claude re-asks a question, the earlier answers move under Previous answers.
+- **Asking again:** when Claude re-asks a question, the earlier answers move under Previous answers. A question asked again after your note opens with your note and Claude's reply to it.
 
 ## Submit and waking a session
 
@@ -109,6 +109,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - A question for someone else wears yellow where the viewer's own wear green: its border, number, kind chip, selected option and answered stripe, with a solid yellow "For the owner" (or "For collaborators") chip. "For you" is green. Pros stay green on every card (2.15.0, the owner: God Game's designer answered G116, for the owner, three times).
 - The watcher no longer wakes a session for an old submit. LevelDB rewrites its files when it compacts, and a pass that read the files during the rewrite could miss the newest marks and see an old "ready" one. A pass that meets an unreadable file or a changed set of files now decides nothing, and a submit wakes only after two passes in a row see it (2.15.1, the God Game session's report).
 - On a phone, a question number opens a preview of that question under the link instead of scrolling to it: its number, title, status, whose it is, the question, and the answers or outcome, with "Go to" for the whole card. On the owner's Android phone, links went nowhere much of the time though the laptop's worked. On a laptop a link still scrolls, and a long way now goes at once instead of a 1.6-second slide that a touch could stop short (2.16.0, the owner on God Game's G143).
+- A question asked again after your note opens with that note, taken from your own answer, and Claude's reply under it, between the question and its context; folded, it reads "Asked again after your note. Claude: “…”". Everyone else sees the reply under your note in Previous answers. Your next answer hides it (on the page where you give it, at that page's next load, so nothing moves under your click). `queue.py ask --reask` needs the folder the answers were listed into (`--answers`) or `--no-reply`, and refuses a re-ask after a note from anyone the question is for without a reply (`--reply`, at most 300 characters; `--reply UID=TEXT` for one person's note). While a queue's published page predates the box, it only warns. Before, the note sat folded under Previous answers, and whatever answered it was somewhere in the question. `queue.py init` now keeps the page it rendered, and `bind` records it as published, so a new queue's session also hears when a newer page is available (2.17.0, the owner on roc-ui's question 326; a reviewer's findings).
 
 ## License
 

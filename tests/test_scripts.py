@@ -81,22 +81,22 @@ class QueueScript(unittest.TestCase):
         w = self.writes(r)[0]
         self.assertEqual((w["op"], w["if_version"]), ("update", 4))
         self.assertNotIn("askedAt", json.loads(Path(w["file_path"]).read_text()), "an edit keeps the question's answers")
-        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "5", "--reask")
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "5", "--reask", "--no-reply")
         self.assertIn("askedAt", json.loads(Path(self.writes(r)[0]["file_path"]).read_text()))
 
     def test_reask_reopens_a_taken_in_question(self):
         self.init()
         self.run_q("ask", "t", self.item_file(GOOD))
-        result = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "7", "--reask")
+        result = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "7", "--reask", "--no-reply")
         body = json.loads(Path(self.writes(result)[0]["file_path"]).read_text())
         self.assertEqual((body["status"], body["takenAt"]), ("open", {"__delete__": True}))
-        result = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "status": "waiting"}), "--version", "8", "--reask")
+        result = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "status": "waiting"}), "--version", "8", "--reask", "--no-reply")
         body = json.loads(Path(self.writes(result)[0]["file_path"]).read_text())
         self.assertEqual((body["status"], body["takenAt"]), ("waiting", {"__delete__": True}))
         result = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "9")
         self.assertNotIn("status", json.loads(Path(self.writes(result)[0]["file_path"]).read_text()), "an edit leaves the status alone")
         unranked = {field: value for field, value in GOOD.items() if field not in ("priority", "priorityReason")}
-        result = self.run_q("ask", "t", self.item_file({**unranked, "ref": "G1"}), "--version", "10", "--reask", ok=False)
+        result = self.run_q("ask", "t", self.item_file({**unranked, "ref": "G1"}), "--version", "10", "--reask", "--no-reply", ok=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("priority", result.stdout + result.stderr)
 
@@ -107,7 +107,7 @@ class QueueScript(unittest.TestCase):
         self.assertIn('G1: this edit (no --reask) sends status "open"', r.stdout)
         self.assertIn("--reask", r.stdout)
         self.assertEqual(json.loads(Path(self.writes(r)[0]["file_path"]).read_text())["status"], "open", "a warning, not a refusal")
-        for args in (["--version", "5"], ["--version", "6", "--reask"]):
+        for args in (["--version", "5"], ["--version", "6", "--reask", "--no-reply"]):
             r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", **({"status": "open"} if "--reask" in args else {})}), *args)
             self.assertNotIn("this edit (no --reask)", r.stdout, args)
         r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G2", "status": "open"}))
@@ -140,7 +140,7 @@ class QueueScript(unittest.TestCase):
             "close": item_body(self.run_q("close", "t", "G1", "--outcome", "Round 1 outcome.", "--undo", "Revert it.", "--version", "2")),
             "take-in": item_body(self.run_q("take-in", "t", dump, "--pins", "G1=2", "--outcome", "G1=Round 1 outcome.")),
         }
-        reasked = item_body(self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "3", "--reask"))
+        reasked = item_body(self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "3", "--reask", "--answers", dump))
         for closer, closed in closers.items():
             with self.subTest(closer):
                 self.assertEqual(closed["status"], "done")
@@ -148,6 +148,144 @@ class QueueScript(unittest.TestCase):
                 self.assertEqual(reopened["status"], "open")
                 left = (set(closed) - {"status", "priority", "priorityReason"}) & set(reopened)
                 self.assertEqual(sorted(left), [], "written when it closed, and kept by the re-ask")
+
+    def listing(self, records):
+        """What ArtifactData `list` with out_dir leaves: one JSON file per record, at its path."""
+        folder = Path(tempfile.mkdtemp(dir=self.tmp))
+        for path, body in records.items():
+            f = folder / f"{path}.json"; f.parent.mkdir(parents=True, exist_ok=True); f.write_text(json.dumps(body))
+        return folder
+
+    def reask(self, *extra, ok=True):
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "3", "--reask", *extra, ok=ok)
+        if not ok:
+            self.assertNotEqual(r.returncode, 0, "refused, not only warned: " + r.stdout)
+            self.assertEqual(self.writes(r), [], "nothing written")
+        return r
+
+    def test_a_reask_after_a_note_needs_a_short_reply(self):
+        # The owner on roc-ui's question 326: answers to earlier notes were hard to spot. A re-ask after a note from someone
+        # it's for opens, for them, with that note and Claude's reply, so the script refuses one without a reply.
+        self.init()
+        self.run_q("ask", "t", self.item_file(GOOD))
+        at = iso(30)
+        d = self.listing({"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)},
+                          "people/u_owner/answers/g1": {"choice": "", "choiceLabel": "", "note": "Which build was that?", "at": at}})
+        r = self.reask(ok=False)
+        self.assertIn("a re-ask needs --answers DIR", r.stdout)
+        self.assertEqual(self.writes(r), [], "without the answers it can't know there was no note")
+        r = self.reask("--answers", d, ok=False)
+        self.assertIn("asked again after a note from the owner, whom it's for", r.stdout)
+        self.assertEqual(self.writes(r), [])
+        r = self.reask("--answers", d, "--reply", "The context now names it. " * 12, ok=False)
+        self.assertIn("characters, over 300", r.stdout)
+        self.assertEqual(self.writes(r), [])
+        self.assertIn("--reply is empty", self.reask("--answers", d, "--reply", "  ", ok=False).stdout)
+        reply = "The context now names the build: 2.16.0, from 25 October."
+        r = self.reask("--answers", d, "--reply", reply)
+        body = json.loads(Path(self.writes(r)[0]["file_path"]).read_text())
+        self.assertEqual(body["reasked"], {"u_owner": {"answerAt": at, "reply": reply}}, "tied to the note's own time, not its words")
+        self.assertIn("with your reply at the top", r.stdout)
+        self.assertIn("reasked", json.loads(Path(self.writes(self.reask("--answers", d, "--reply", "x" * 300))[0]["file_path"]).read_text()),
+                      "300 characters is the most")
+        body = json.loads(Path(self.writes(self.reask("--no-reply"))[0]["file_path"]).read_text())
+        self.assertNotIn("reasked", body, "--no-reply says none is needed, and leaves earlier replies as they are")
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "3", "--reply", reply, ok=False)
+        self.assertIn("go with --reask", r.stderr)
+
+    def test_only_a_note_from_whoever_it_is_for_needs_a_reply(self):
+        self.init()
+        self.run_q("ask", "t", self.item_file(GOOD))
+        asked = iso(60)
+        def listing(item, answers, people=None):
+            records = {"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": asked, **item}}
+            records.update({f"people/{uid}/answers/g1": {"choice": "", "choiceLabel": "", "note": f"A note from {uid}.", "at": at}
+                            for uid, at in answers.items()})
+            records.update({f"people/{uid}": body for uid, body in (people or {}).items()})
+            return self.listing(records)
+        submitted = {"u_des": {"submittedAt": iso(5)}}
+        d = listing({"for": "owner"}, {"u_des": iso(30)}, submitted)
+        self.assertNotIn("reasked", json.loads(Path(self.writes(self.reask("--answers", d))[0]["file_path"]).read_text()),
+                         "a collaborator's input on the owner's question needs no reply")
+        body = json.loads(Path(self.writes(self.reask("--answers", d, "--reply", "Noted; the owner decides it."))[0]["file_path"]).read_text())
+        self.assertEqual(list(body["reasked"]), ["u_des"], "but may have one, when it led to the re-ask")
+        d = listing({}, {"u_owner": iso(90)})
+        self.reask("--answers", d)   # a note from an earlier round: answered then
+        self.assertIn("nothing for it to answer", self.reask("--answers", d, "--reply", "x", ok=False).stdout)
+        self.reask("--answers", listing({"for": "collaborator"}, {"u_des": iso(3)}, submitted))   # still being written (O26)
+        r = self.reask("--answers", listing({"for": "collaborator"}, {"u_des": iso(30)}, submitted), ok=False)
+        self.assertIn("a note from a collaborator (u_des), whom it's for", r.stdout)
+        earlier, changed, mine = iso(120), iso(100), iso(30)
+        d = listing({"reasked": {"u_des": {"answerAt": earlier, "reply": "Earlier."}, "u_eve": {"answerAt": iso(200), "reply": "Stale."}}},
+                    {"u_des": earlier, "u_eve": changed, "u_owner": mine})
+        body = json.loads(Path(self.writes(self.reask("--answers", d, "--reply", "New."))[0]["file_path"]).read_text())
+        self.assertEqual(body["reasked"], {"u_des": {"answerAt": earlier, "reply": "Earlier."}, "u_owner": {"answerAt": mine, "reply": "New."}},
+                         "an earlier reply stays while its note does; one whose note changed since goes")
+
+    def test_a_reply_goes_to_each_note_it_answers(self):
+        # A reviewer's findings: a listing without the answers passed silently; notes taken in with --unsubmitted were
+        # invisible; one reply went to everyone's notes; --no-reply was never checked; a hand-written `reasked` went out.
+        self.init()
+        self.run_q("ask", "t", self.item_file(GOOD))
+        item = {"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)}}
+        note = lambda text: {"choice": "", "choiceLabel": "", "note": text, "at": iso(30)}
+        self.assertIn("No people under", self.reask("--answers", self.listing(item), "--reply", "x", ok=False).stderr)
+        self.assertIn("No items/g1 under", self.reask("--answers", self.listing({"people/u_owner": {}}), ok=False).stderr)
+        r = self.reask("--answers", self.listing({**item, "people/u_owner": {}, "people/u_des/answers/g1": note("Hm?")}), ok=False)
+        self.assertIn("people/u_owner/answers", r.stderr, "a person listed without their answers stops it")
+        both = self.listing({**item, "people/u_owner/answers/g1": note("Which build?"), "people/u_des/answers/g1": note("Too flat?"),
+                             "people/u_des": {"submittedAt": iso(5)}, "people/u_eve/answers/g1": ["not", "an", "answer"]})
+        r = self.reask("--answers", both, "--no-reply")
+        self.assertIn("--no-reply, so the note from the owner, a collaborator (u_des), whom it's for, gets no answer", r.stdout)
+        r = self.reask("--answers", both, "--reply", "The context now names the build and the slope.")
+        self.assertIn("the same reply shows under each note from the owner, a collaborator (u_des)", r.stdout)
+        self.assertNotIn("Traceback", r.stderr, "an answer that isn't a record is skipped")
+        r = self.reask("--answers", both, "--reply", "u_owner=It names the build now.", ok=False)
+        self.assertIn("a note from a collaborator (u_des), whom it's for", r.stdout, "each note it's for needs a reply")
+        r = self.reask("--answers", both, "--reply", "u_owner=It names the build now.", "--reply", "u_des=8 m stays: see the slope chart.")
+        body = json.loads(Path(self.writes(r)[0]["file_path"]).read_text())
+        self.assertEqual({uid: mark["reply"] for uid, mark in body["reasked"].items()},
+                         {"u_owner": "It names the build now.", "u_des": "8 m stays: see the slope chart."})
+        self.assertNotIn("the same reply", r.stdout)
+        r = self.reask("--answers", both, "--reply", "Both answered in the context.", "--reply", "u_des=8 m stays.")
+        body = json.loads(Path(self.writes(r)[0]["file_path"]).read_text())
+        self.assertEqual({uid: mark["reply"] for uid, mark in body["reasked"].items()}, {"u_owner": "Both answered in the context.", "u_des": "8 m stays."})
+        self.assertIn("for a collaborator (u_eve), who wrote no note", self.reask("--answers", both, "--reply", "x", "--reply", "u_eve=y", ok=False).stdout)
+        self.assertIn("2 replies for everyone", self.reask("--answers", both, "--reply", "x", "--reply", "y", ok=False).stdout)
+        late = self.listing({**item, "people/u_des/answers/g1": note("Which build?"), "people/u_des": {"submittedAt": iso(40)}})
+        self.assertNotIn("reasked", json.loads(Path(self.writes(self.reask("--answers", late))[0]["file_path"]).read_text()),
+                         "a note saved since their Submit is still being written")
+        r = self.reask("--answers", late, "--unsubmitted", "u_des", ok=False)
+        self.assertIn("a note from a collaborator (u_des), whom it's for", r.stdout, "unless the owner had it taken in anyway")
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "reasked": {"u_des": {"answerAt": "x", "reply": "Hand-written."}}}),
+                       "--version", "3", "--reask", "--no-reply", ok=False)
+        self.assertIn("`reasked` is written by `ask --reask --reply`", r.stderr)
+
+    def test_a_queue_whose_page_predates_the_box_gets_a_warning(self):
+        # Every queue's page shows the reply only once the session that owns it republishes it (the owner, 18 October).
+        # Until then the script warns instead of refusing (the owner on roc-ui's question 326).
+        self.init()
+        self.run_q("ask", "t", self.item_file(GOOD))
+        state = self.tmp / "owner-queue" / "t" / "state.json"
+        s = json.loads(state.read_text()); s["publishedTemplate"] = "000000000000"; state.write_text(json.dumps(s))   # an older page
+        d = self.listing({"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)},
+                          "people/u_owner/answers/g1": {"choice": "", "choiceLabel": "", "note": "Which build?", "at": iso(30)}})
+        for extra in ((), ("--answers", d), ("--answers", d, "--reply", "The context now names it. " * 12)):
+            with self.subTest(extra[-1:] if extra else "no answers"):
+                r = self.reask(*extra)
+                self.assertIn("WARN", r.stdout)
+                self.assertIn("Not refused yet: this queue's published page predates the box that shows the reply", r.stdout)
+                self.assertEqual(len(self.writes(r)), 1, "written")
+        self.assertIn("doesn't show it until", self.reask("--answers", d, "--reply", "Named it.").stdout)
+        self.run_q("render", "t")
+        self.run_q("published", "t", "v2")
+        r = self.reask("--answers", d, ok=False)
+        self.assertIn("whom it's for", r.stdout, "refused once the page has the box")
+        self.assertNotIn("Not refused yet", r.stdout)
+        s = json.loads(state.read_text()); s["pageFeatures"] = {"aaaaaaaaaaaa": ["reasked"]}; s["publishedTemplate"] = "aaaaaaaaaaaa"
+        state.write_text(json.dumps(s))   # published with the box, and a newer page rendered but not published yet
+        self.run_q("render", "t")
+        self.assertIn("whom it's for", self.reask("--answers", d, ok=False).stdout, "what the published page shows is kept")
 
     def test_ask_again_before_sending_keeps_the_number(self):
         self.init()
