@@ -75,7 +75,8 @@ button.link { border: 0; background: none; padding: 0; color: var(--accent); tex
 .ref { font-family: var(--font-mono); font-size: .8rem; color: var(--accent); font-weight: 600; }
 .item-head h3 { flex: 1 1 16rem; min-width: 0; }
 .chips { display: flex; flex-wrap: wrap; gap: .3rem; }
-.chip { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .03em; padding: .08rem .45rem; border-radius: 999px; white-space: nowrap; background: var(--accent-soft); color: var(--accent); }
+/* A chip wraps only when it alone is wider than its row: one that didn't (2.17.1's status tag) widened a phone's page. */
+.chip { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .03em; padding: .08rem .45rem; border-radius: 999px; overflow-wrap: anywhere; background: var(--accent-soft); color: var(--accent); }
 .chip.due { background: var(--warn-soft); color: var(--warn); }
 .chip.for { background: var(--accent-soft); color: var(--accent); }
 /* A question someone else decides wears yellow wherever the viewer's own wear green, and says whose it is in solid

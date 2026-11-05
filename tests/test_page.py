@@ -297,6 +297,17 @@ class PageTest(unittest.TestCase):
         self.assertIn("G9", opened, "never taken in: still open")
         self.assertIn("not a status the page knows", p.locator(".item:has(.ref:text-is('G9'))").first.inner_text())
 
+    def test_no_chip_widens_a_phone_screen(self):
+        # The tag for a status the page doesn't know made a 360 px phone's page 476 px wide, so it scrolled sideways.
+        data = seed()
+        data["items/g8"] = {**decision("G8", 8, iso(60)), "status": "taken-in-by-hand"}
+        data["items/g6"]["due"] = "after the designer's next round of sketches"
+        p = self.open(data, width=360)
+        self.assertLessEqual(p.evaluate("document.documentElement.scrollWidth"), 360)
+        over = p.evaluate("[...document.querySelectorAll('.item .chip')].filter(c => c.getBoundingClientRect().right > "
+                          "c.closest('.item').getBoundingClientRect().right + 0.5).map(c => c.textContent)")
+        self.assertEqual(over, [])
+
     def test_times_show_in_the_viewers_zone(self):
         data = seed()
         data["items/g1"]["context"] = "<p>Submitted 2026-10-18T02:52Z, built <time datetime=\"2026-10-18T03:10:00Z\">soon</time>; <code>2026-10-18T02:52Z</code> stays.</p>"
