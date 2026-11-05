@@ -782,6 +782,11 @@ def cmd_answers(a):
     missing = [u for u in uids if not (root / "people" / u / "answers").is_dir()]
     if missing:
         print("Also list these with out_dir " + str(root) + ": " + ", ".join(f"people/{u}/answers" for u in missing))
+    stray_status = unknown_status(items)
+    if stray_status:
+        print("A status the page doesn't know (it shows these open, their answers still on them): " +
+              ", ".join(f"{it.get('ref') or i} ({it['status']!s})" for i, it in sorted(stray_status.items())) +
+              ". take-in closes those already taken in.")
     for uid in uids:
         p = people.get(uid, {})
         sub, read = real_time(p.get("submittedAt")), real_time((receipts.get(uid) or {}).get("readAt"))
@@ -826,6 +831,16 @@ def cmd_answers(a):
             print(f"- Still writing, saved since their last Submit, so not shown or taken in: {', '.join(writing)}. "
                   "They press Submit when they're done; if the owner asks, add --unsubmitted " + uid + ".")
     print("\nAct only within each question's choices. A note asking for more than the question becomes a new question for the owner." + template_notice(state))
+
+
+# The statuses the page knows. Any other (a hand-written "closed", a typo) showed the question as open, its answers
+# still on it, though Claude had taken them in (a game designer's queue, 5 November: three questions "lingering").
+STATUSES = ("open", "waiting", "done")
+
+
+def unknown_status(items):
+    """Items whose status the page doesn't know, by id (a missing status is open)."""
+    return {i: it for i, it in items.items() if it.get("status") is not None and it.get("status") not in STATUSES}
 
 
 def cmd_take_in(a):
@@ -888,9 +903,13 @@ def cmd_take_in(a):
                     marks.setdefault(item_id, dict(item.get("read") or {}))[uid] = mark
                 continue
             taken.setdefault(item_id, uid)
+    # A question closed with a status the page doesn't know: taken in (takenAt), so it's done; the page showed it open.
+    stray_status = unknown_status(items)
+    repair = [i for i, it in stray_status.items() if it.get("takenAt") and i not in taken]
+    unrepaired = [it.get("ref") or i for i, it in stray_status.items() if not it.get("takenAt") and i not in taken]
     unread = [uid for uid in uids if real_time((people.get(uid) or {}).get("submittedAt"))
               and not ((receipts.get(uid) or {}).get("readAt", "") >= real_time(people[uid]["submittedAt"]))]
-    need = [items[i].get("ref") or i for i in [*taken, *marks] if i not in pins] + [u for u in unread if u in receipts and u not in pins]
+    need = [items[i].get("ref") or i for i in [*taken, *marks, *repair] if i not in pins] + [u for u in unread if u in receipts and u not in pins]
     if need:
         die("Pin each write to the version the listing showed (a store write to an existing record needs it): "
             f"add --pins \"{' '.join(f'{n}=?' for n in need)}\"")
@@ -902,8 +921,15 @@ def cmd_take_in(a):
             data["outcome"] = plans[item_id]
         out.add("update", "items", item_id, data, pins[item_id])
         refs.append(items[item_id].get("ref") or item_id)
+    for item_id in repair:
+        item = items[item_id]
+        order = item.get("order") if isinstance(item.get("order"), int) and item["order"] > 10 ** 9 else None
+        if order is None:
+            when = real_time(item.get("takenAt"))
+            order = int(parse_time(when).timestamp()) if when else int(t.timestamp())
+        out.add("update", "items", item_id, {"status": "done", "order": order}, pins[item_id])
     for item_id, read in marks.items():
-        if item_id not in taken:
+        if item_id not in taken and item_id not in repair:
             out.add("update", "items", item_id, {"read": read}, pins[item_id])
     stray = [ref for ref in replies if ref not in marks and ref not in taken]
     if stray:
@@ -919,6 +945,13 @@ def cmd_take_in(a):
     # "Claude took in your answers on <time>" (the owner, O14 and O15).
     print(f"Closes {len(refs)} answered question{'s' * (len(refs) != 1)}" + (f" ({', '.join(refs)})" if refs else "") +
           (f", receipts for {', '.join(read)}" if read else "") + (f", {len(kept)} Anything else saved and cleared" if kept else "") + ".")
+    if repair:
+        print("Done again: " + ", ".join(items[i].get("ref") or i for i in repair) + ", closed with a status the page doesn't know "
+              f"({', '.join(sorted({str(stray_status[i]['status']) for i in repair}))}), so it showed them open with their answers. "
+              "Close only with take-in or close, never by writing a status by hand.")
+    if unrepaired:
+        print("A status the page doesn't know, on questions never taken in: " + ", ".join(unrepaired) +
+              f". The page shows them open. Set it with close, wait or ask --reask (statuses: {', '.join(STATUSES)}).")
     for uid, keep, n in kept:
         print(f"Anything else from {who(uid).lower()} ({n} characters) saved to {keep}.")
     for uid, keep in unsaved:

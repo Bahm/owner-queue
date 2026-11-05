@@ -284,6 +284,19 @@ class PageTest(unittest.TestCase):
         self.assertEqual(refs[:2], ["G8", "G9"])
         self.assertEqual(refs[-1], "G7", "a question without a close time goes last")
 
+    def test_a_status_the_page_doesnt_know(self):
+        # A hand-written "closed" showed a question open, its answers on it, though Claude had taken them in (2.17.1).
+        data = seed()
+        data["items/g8"] = {**decision("G8", 8, iso(60)), "status": "closed", "takenAt": iso(5), "order": 1792300000}
+        data["items/g9"] = {**decision("G9", 9, iso(60)), "status": "answered"}
+        p = self.open(data)
+        done = p.locator("#done-list .item .ref").all_text_contents()
+        opened = p.locator("#section-open .item .ref").all_text_contents()
+        self.assertIn("G8", done, "taken in: under Done")
+        self.assertNotIn("G8", opened)
+        self.assertIn("G9", opened, "never taken in: still open")
+        self.assertIn("not a status the page knows", p.locator(".item:has(.ref:text-is('G9'))").first.inner_text())
+
     def test_times_show_in_the_viewers_zone(self):
         data = seed()
         data["items/g1"]["context"] = "<p>Submitted 2026-10-18T02:52Z, built <time datetime=\"2026-10-18T03:10:00Z\">soon</time>; <code>2026-10-18T02:52Z</code> stays.</p>"

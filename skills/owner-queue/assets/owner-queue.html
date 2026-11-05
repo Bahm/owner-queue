@@ -631,6 +631,15 @@ function currentAnswers(item, id) {
 }
 function isAnswered(id) { const item = items.get(id); return currentAnswers(item, id).length > 0 || (me && hasContent(item, myAnswer(id)) && isCurrent(item, myAnswer(id))); }
 
+// A status the page doesn't know (a hand-written "closed", a typo) used to show the question open, its answers still on
+// it, after Claude had taken them in (2.17.1, a game designer's queue: three questions "lingering"). Taken in (takenAt), it's
+// done; otherwise open. Either way it says so, so whoever looks can have it fixed.
+const strayStatus = new Map();   // id -> the status as stored
+function knownStatus(id, item) {
+  if (!isObj(item) || item.status === undefined || ["open", "waiting", "done"].includes(item.status)) return item;
+  strayStatus.set(id, String(item.status));
+  return { ...item, status: item.takenAt ? "done" : "open" };
+}
 function sectionOf(item) { return item.status === "done" ? "done" : item.status === "waiting" ? "waiting" : "open"; }
 function isDecision(item) { return arr(item.choices).length >= 2 && item.group !== "yours"; }
 function sorted() { return [...items.entries()].sort(([, a], [, b]) => (a.priority ?? Infinity) - (b.priority ?? Infinity) || (a.order ?? 999) - (b.order ?? 999) || String(a.ref || "").localeCompare(String(b.ref || ""), undefined, { numeric: true })); }
@@ -774,6 +783,7 @@ function updateItem(id, item, rank, openCount) {
   if (item.lowPriority) v.chips.append(el("span", "chip low", "low priority"));
   if (item.due && open) v.chips.append(el("span", "chip due", item.due));
   if (item.status === "waiting") v.chips.append(el("span", "chip low", "scheduled"));
+  if (strayStatus.has(id)) v.chips.append(el("span", "chip low", "stored as “" + strayStatus.get(id) + "”, not a status the page knows"));
   v.chips.hidden = !v.chips.childElementCount;
 
   v.priority.replaceChildren();
@@ -1290,7 +1300,7 @@ async function start() {
   db.collection("config").onSnapshot((snap) => { if (!changed("config", snap)) return; const d = snap.docs.find((x) => x.id === "page"); const was = loaded.config; loaded.config = true; applyConfig(d ? d.data() : {}); if (was) noteUpdate(); }, onSubError);
   db.collection("items").onSnapshot((snap) => {
     if (!changed("items", snap)) return;
-    items.clear(); for (const d of snap.docs) items.set(d.id, d.data());
+    items.clear(); strayStatus.clear(); for (const d of snap.docs) items.set(d.id, knownStatus(d.id, d.data()));
     const was = loaded.items; loaded.items = true; render(); if (was) noteUpdate();
   }, onSubError);
   db.collection("feed").onSnapshot((snap) => {

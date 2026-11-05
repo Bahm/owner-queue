@@ -550,6 +550,28 @@ class QueueScript(unittest.TestCase):
                             "a plan for an untaken question is refused")
         self.assertEqual([x for x in self.writes(r) if x["collection"] == "feed"], [], "take-in writes nothing under For information")
 
+    def test_take_in_repairs_a_status_the_page_doesnt_know(self):
+        # A session that closed questions by hand wrote "closed"; the page showed them open with their answers (2.17.1).
+        self.init()
+        d = self.listing({"items/g1": {**GOOD, "ref": "G1", "status": "closed", "askedAt": iso(60), "takenAt": iso(20)},
+                          "items/g2": {**GOOD, "ref": "G2", "status": "answered", "askedAt": iso(60)},
+                          "items/g3": {**GOOD, "ref": "G3", "status": "done", "askedAt": iso(60)},
+                          "people/u_owner": {}})
+        (d / "people/u_owner/answers").mkdir(parents=True)
+        r = self.run_q("answers", "t", d)
+        self.assertIn("G1 (closed)", r.stdout)
+        self.assertIn("G2 (answered)", r.stdout)
+        self.assertIn("--pins", self.run_q("take-in", "t", d, ok=False).stdout + self.run_q("take-in", "t", d, ok=False).stderr)
+        r = self.run_q("take-in", "t", d, "--pins", "G1=4")
+        w = {x["doc_id"]: x for x in self.writes(r) if x["collection"] == "items"}
+        self.assertEqual(sorted(w), ["g1"], "only the one taken in is closed; G2 is only reported")
+        self.assertEqual(w["g1"]["if_version"], 4)
+        g1 = json.loads(Path(w["g1"]["file_path"]).read_text())
+        self.assertEqual(g1["status"], "done")
+        self.assertGreater(g1["order"], 10 ** 9, "Done sorts by order: the time it was taken in")
+        self.assertIn("Done again: G1", r.stdout)
+        self.assertIn("never taken in: G2", r.stdout)
+
     def test_receipt_and_clear_free(self):
         self.init()
         w = self.writes(self.run_q("receipt", "t", "u_des"))[0]
