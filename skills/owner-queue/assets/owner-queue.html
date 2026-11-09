@@ -289,7 +289,7 @@ function withCode(target, text) {
 // no event handlers, no frames, no forms, links and pictures only from safe addresses.
 const TAGS = new Set("a abbr time b blockquote br caption code dd del div dl dt em figcaption figure h3 h4 h5 hr i img kbd li mark ol p pre q s small span strong sub sup table tbody td tfoot th thead tr u ul button svg g defs title desc polygon polyline line rect circle ellipse path text tspan marker".split(" "));
 const DROP = new Set("script style iframe frame frameset object embed form input textarea select option template link meta base noscript foreignobject animate set audio video source track canvas dialog".split(" "));
-const ATTRS = new Set("href title datetime alt src width height colspan rowspan scope start class role aria-label aria-hidden lang dir viewbox xmlns fill stroke stroke-width stroke-linejoin stroke-linecap stroke-dasharray opacity fill-opacity stroke-opacity points x y x1 y1 x2 y2 cx cy r rx ry d transform font-size font-weight text-anchor dominant-baseline marker-end marker-start refx refy markerwidth markerheight orient preserveaspectratio style type data-save data-save-zip data-files data-play".split(" "));
+const ATTRS = new Set("href title datetime alt src width height colspan rowspan scope start class role aria-label aria-hidden lang dir viewbox xmlns fill stroke stroke-width stroke-linejoin stroke-linecap stroke-dasharray opacity fill-opacity stroke-opacity points x y x1 y1 x2 y2 cx cy r rx ry d transform font-size font-weight text-anchor dominant-baseline marker-end marker-start refx refy markerwidth markerheight orient preserveaspectratio style type data-save data-save-zip data-save-join data-files data-play".split(" "));
 function safeUrl(value, forImage) {
   const v = String(value || "").trim();
   if (!v) return null;
@@ -1206,6 +1206,13 @@ async function zipFiles(paths, folder) {
   e.setUint32(0, 0x06054b50, true); e.setUint16(8, paths.length, true); e.setUint16(10, paths.length, true); e.setUint32(12, size, true); e.setUint32(16, off, true);
   return new Blob([...body, ...dir, e], { type: "application/zip" });
 }
+// A file published in parts (each under the 16 MB a published file may be), joined in order into the one file saved.
+async function joinFiles(paths) {
+  const parts = [];
+  for (const p of paths) { const r = await fetch(p); if (!r.ok) throw new Error(p.split("/").pop() + " didn't load (HTTP " + r.status + ")"); parts.push(await r.blob()); }
+  if (!parts.length) throw new Error("no parts named");
+  return new Blob(parts);
+}
 function relative(path) { return path && !/^[a-z][a-z0-9+.-]*:/i.test(path) && !path.startsWith("//") ? path : null; }
 // Why a save failed, in words, with the platform's code, so a report can name it (the God Game session, 22 October).
 function saveFailed(e, filename) {
@@ -1220,7 +1227,7 @@ function saveFailed(e, filename) {
   return " " + words + (code ? " (" + code + ")" : "");
 }
 document.addEventListener("click", async (ev) => {
-  const b = ev.target.closest && ev.target.closest("[data-save], [data-save-zip], [data-play]");
+  const b = ev.target.closest && ev.target.closest("[data-save], [data-save-zip], [data-save-join], [data-play]");
   if (!b || !b.closest(".context, .panel")) return;
   ev.preventDefault();
   let note = b.nextElementSibling && b.nextElementSibling.classList.contains("save-note") ? b.nextElementSibling : null;
@@ -1236,12 +1243,14 @@ document.addEventListener("click", async (ev) => {
     b.parentElement.append(frame); b.textContent = "Close"; iframe.focus(); return;
   }
   if (!downloads) { say(" Downloading isn't available in this view (no downloads here)."); return; }
-  const zip = b.getAttribute("data-save-zip"), path = relative(b.getAttribute("data-save")), filename = zip || String(path || "").split("/").pop();
+  const zip = b.getAttribute("data-save-zip"), join = b.getAttribute("data-save-join"), path = relative(b.getAttribute("data-save"));
+  const filename = zip || join || String(path || "").split("/").pop();
   try {
-    if (zip) say(" Packing…");
-    const files = zip ? (b.getAttribute("data-files") || "").split(/\s+/).map(relative).filter(Boolean) : [];
+    if (zip) say(" Packing…"); else if (join) say(" Joining…");
+    const files = zip || join ? (b.getAttribute("data-files") || "").split(/\s+/).map(relative).filter(Boolean) : [];
     let blob;
     if (zip) blob = await zipFiles(files, zip.replace(/\.zip$/, ""));
+    else if (join) blob = await joinFiles(files);
     else { const r = await fetch(path); if (!r.ok) throw new Error("the file didn't load (HTTP " + r.status + ")"); blob = await r.blob(); }
     await downloads.save({ filename, data: blob });
     say(" Saved.");

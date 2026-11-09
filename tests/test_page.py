@@ -75,6 +75,7 @@ class PageTest(unittest.TestCase):
                                            "<meta name=viewport content='width=device-width,initial-scale=1'></head><body>"
                                            + html + "</body></html>")
         cls.url = (folder / "index.html").as_uri()
+        cls.folder = folder
         (folder / "host.html").write_text(HOST)
         cls.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Quiet, directory=str(folder)))
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
@@ -807,6 +808,28 @@ class PageTest(unittest.TestCase):
         note = p.locator(".panel .save-note").nth(1).inner_text()
         self.assertIn("Couldn't download it:", note, "a file that doesn't load says so, not 'unavailable'")
         self.assertNotIn("Saved", note)
+
+    def test_a_file_in_parts_downloads_joined(self):
+        # A file larger than one published file may be goes up in parts; the Download joins them in order (2.18.0).
+        (self.folder / "game").mkdir(exist_ok=True)
+        parts = ["<!doctype html><p>caf\u00e9 ", "A" * 70000, " \u2014 end</p>\n"]
+        for i, t in enumerate(parts, 1): (self.folder / "game" / f"g-part{i}.txt").write_bytes(t.encode())
+        data = seed()
+        data["config/page"]["panels"] = [{"id": "dl", "title": "Files", "html":
+            '<p><button data-save-join="g.html" data-files="game/g-part1.txt game/g-part2.txt game/g-part3.txt">Download joined</button> '
+            '<button data-save-join="h.html" data-files="game/g-part1.txt game/g-part9.txt">Download broken</button></p>'}]
+        served = f"http://127.0.0.1:{self.server.server_port}/index.html"
+        p = self.open(data, cfg={"downloads": True}, url=served)
+        p.click("text=Download joined"); p.wait_for_timeout(300)
+        self.assertEqual(p.evaluate("window.__saved"), "g.html")
+        self.assertIn("Saved.", self.text(".panel .save-note"))
+        got = p.evaluate("window.__savedData.arrayBuffer().then((b) => Array.from(new Uint8Array(b)))")
+        self.assertEqual(bytes(got), "".join(parts).encode(), "the parts joined in order, byte for byte")
+        p.evaluate("window.__saved = null")
+        p.click("text=Download broken"); p.wait_for_timeout(300)
+        note = p.locator(".panel .save-note").nth(1).inner_text()
+        self.assertIn("g-part9.txt didn't load (HTTP 404)", note, "a missing part is named")
+        self.assertIsNone(p.evaluate("window.__saved"), "nothing saved when a part is missing")
 
     def test_no_store(self):
         self.ctx = self.browser.new_context()

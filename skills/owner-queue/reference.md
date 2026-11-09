@@ -93,6 +93,7 @@ Answers save as typed: choices at once, notes 0.8 s after the last keystroke, on
 - `<button data-play="game/godgame.html">Play here</button>` opens that file in a frame below the button, on click only.
 - `<button data-save="hand/rest.png">Download</button>` saves one file through the downloads capability.
 - `<button data-save-zip="charts.zip" data-files="hand/a.png hand/b.png">Download all</button>` packs the files into one zip.
+- `<button data-save-join="godgame.html" data-files="game/godgame-part1.txt game/godgame-part2.txt">Download it</button>` joins the files, in the order given, into one file saved under that name: for a file larger than one published file may be (16 MB as text), published in parts. Publish the parts as text (`.txt`), each split where no character is cut. After publishing, read the parts back (Artifact `read` with `paths`) and compare their join's sha256 with the whole file's.
 - A save that fails says why next to its button, with the platform's code, e.g. ".html files can't be downloaded in this view. (extension_not_enabled)", or "Couldn't download it: the file didn't load (HTTP 404)." Quote the line in a report.
 
 ## Links between questions
