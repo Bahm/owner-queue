@@ -643,7 +643,7 @@ function knownStatus(id, item) {
 }
 function sectionOf(item) { return item.status === "done" ? "done" : item.status === "waiting" ? "waiting" : "open"; }
 function isDecision(item) { return arr(item.choices).length >= 2 && item.group !== "yours"; }
-function sorted() { return [...items.entries()].sort(([, a], [, b]) => (a.priority ?? Infinity) - (b.priority ?? Infinity) || (a.order ?? 999) - (b.order ?? 999) || String(a.ref || "").localeCompare(String(b.ref || ""), undefined, { numeric: true })); }
+function sorted() { return [...items.entries()].sort(([, a], [, b]) => (!!a.lowPriority - !!b.lowPriority) || (a.priority ?? Infinity) - (b.priority ?? Infinity) || (a.order ?? 999) - (b.order ?? 999) || String(a.ref || "").localeCompare(String(b.ref || ""), undefined, { numeric: true })); }
 
 function subscribeAnswers(uid) {
   if (!db || !uid || answerSubs.has(uid)) return;

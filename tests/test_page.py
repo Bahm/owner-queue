@@ -131,6 +131,16 @@ class PageTest(unittest.TestCase):
         self.assertIn("recommended", self.text("#item-g1 .opts").lower())
         self.assertIn("Copy prompt", self.text("#item-g5"))
 
+    def test_low_priority_ranks_after_the_rest(self):
+        # A low-priority question ranked above untagged ones by its number alone went against "most important first"
+        # (the owner, roc-ui's queue, 13 November): the tag now sorts first, the number within each part.
+        data = seed()
+        data["items/g2"]["lowPriority"] = True
+        p = self.open(data)
+        self.assertEqual(p.locator("#section-urgent .item .ref").all_inner_texts()[:2], ["G1", "G3"])
+        self.assertIn("priority 2 of 5", self.text("#item-g3 .priority").lower())
+        self.assertIn("priority 5 of 5", self.text("#item-g2 .priority").lower(), "the tagged question ranks last")
+
     def test_you_always_means_whoever_is_viewing(self):
         # Each viewer reads "you" as themselves, so the page's own words never use it for anyone else: a collaborator saw
         # "Your call" next to "For the owner", and the owner's in-person steps under their own "Needs you, in person"
