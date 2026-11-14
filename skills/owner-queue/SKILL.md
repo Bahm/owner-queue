@@ -83,7 +83,7 @@ Write the item as JSON (fields in [reference.md](reference.md)) and run `Q ask <
 
 ## For information, Anything else and the status line
 
-- `Q fyi <slug> "<html>"` reports news that isn't about a question: a build, a report, a status change. Answered questions and what's done about them show under Done. The script stamps it. The page shows 48 hours of entries. `Q prune` deletes older ones; run it at each housekeeping.
+- `Q fyi <slug> "<html>"` (or `@FILE` to read the HTML from a file; a bare file name is refused, since the page would show the name) reports news that isn't about a question: a build, a report, a status change. Answered questions and what's done about them show under Done. The script stamps it. The page shows 48 hours of entries. `Q prune` deletes older ones; run it at each housekeeping.
 - Clear "Anything else" once it's taken in (`take-in` saves and clears it; the receipt tells the sender). Save a pasted report to a file before clearing it.
 - `Q config <slug> --lede "<b>17 October:</b> …"` sets the dated status line: what's open and what's running, in one or two sentences.
 

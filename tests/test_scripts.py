@@ -417,6 +417,13 @@ class QueueScript(unittest.TestCase):
         self.assertRegex(json.loads(Path(w["file_path"]).read_text())["at"], r"Z$")
         r = self.run_q("fyi", "t", '<img src="data:image/png;base64,AA">', ok=False)
         self.assertIn("data: URI", r.stdout)
+        note = Path(self.tmp) / "fyi-note.html"
+        note.write_text("<p>Built</p>\n")
+        for name in (str(note), "drafts/fyi-missing.html"):
+            r = self.run_q("fyi", "t", name, ok=False)
+            self.assertIn("a file's name", r.stdout, "a file's name in place of the HTML is refused, not posted as text")
+        r = self.run_q("fyi", "t", "@" + str(note))
+        self.assertEqual(json.loads(Path(self.writes(r)[0]["file_path"]).read_text())["html"], "<p>Built</p>\n")
         self.assertIn('"where": [["at", "<"', self.run_q("prune", "t").stdout)
         w = self.writes(self.run_q("prune", "t", "f1=3", "f2=1"))
         self.assertEqual([(x["op"], x["doc_id"], x["if_version"]) for x in w], [("delete", "f1", 3), ("delete", "f2", 1)])

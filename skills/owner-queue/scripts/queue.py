@@ -324,8 +324,19 @@ def lint_item(item, state=None):
     return errors, warnings
 
 
+def is_file(text):
+    try:
+        return Path(text).expanduser().is_file()
+    except OSError:
+        return False
+
+
 def lint_feed(entry):
     errors, warnings = [], []
+    text = str(entry.get("html", "")).strip()
+    if "<" not in text and re.fullmatch(r"\S+", text) and (re.search(r"\.(html?|md|json|txt)$", text, re.I) or is_file(text)):
+        errors.append(f"feed: {text!r} is a file's name, and the page would show the name. "
+                      f"Pass the HTML itself, or @FILE to read it from a file.")
     lint_html("feed", entry.get("html", ""), errors, warnings)
     if parse_time(entry.get("at")) is None:
         errors.append("feed: `at` must be UTC ending in Z, from the clock, never typed.")
