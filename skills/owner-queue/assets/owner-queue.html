@@ -108,6 +108,8 @@ button.link { border: 0; background: none; padding: 0; color: var(--accent); tex
 .context table { border-collapse: collapse; font-size: .88rem; }
 .context .table-scroll { overflow-x: auto; }
 .context th, .context td { text-align: left; padding: .25rem .6rem .25rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.context details > summary, #lede details > summary, #feed-list details > summary { cursor: pointer; font-weight: 600; }
+.context details > :not(summary), #lede details > :not(summary), #feed-list details > :not(summary) { margin: .4rem 0 0; }
 
 .opts { display: grid; gap: .4rem; }
 .opt { display: grid; gap: .25rem; text-align: left; width: 100%; padding: .55rem .7rem; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: .88rem; cursor: pointer; }
@@ -287,9 +289,9 @@ function withCode(target, text) {
 
 // Claude's HTML (question context, the status line, For information, panels) passes an allowlist: no scripts,
 // no event handlers, no frames, no forms, links and pictures only from safe addresses.
-const TAGS = new Set("a abbr time b blockquote br caption code dd del div dl dt em figcaption figure h3 h4 h5 hr i img kbd li mark ol p pre q s small span strong sub sup table tbody td tfoot th thead tr u ul button svg g defs title desc polygon polyline line rect circle ellipse path text tspan marker".split(" "));
+const TAGS = new Set("a abbr time b blockquote br caption code dd del details div dl dt em figcaption figure h3 h4 h5 hr i img kbd li mark ol p pre q s small span strong sub summary sup table tbody td tfoot th thead tr u ul button svg g defs title desc polygon polyline line rect circle ellipse path text tspan marker".split(" "));
 const DROP = new Set("script style iframe frame frameset object embed form input textarea select option template link meta base noscript foreignobject animate set audio video source track canvas dialog".split(" "));
-const ATTRS = new Set("href title datetime alt src width height colspan rowspan scope start class role aria-label aria-hidden lang dir viewbox xmlns fill stroke stroke-width stroke-linejoin stroke-linecap stroke-dasharray opacity fill-opacity stroke-opacity points x y x1 y1 x2 y2 cx cy r rx ry d transform font-size font-weight text-anchor dominant-baseline marker-end marker-start refx refy markerwidth markerheight orient preserveaspectratio style type data-save data-save-zip data-save-join data-files data-play".split(" "));
+const ATTRS = new Set("href title datetime alt src width height colspan rowspan scope start class role aria-label aria-hidden lang dir viewbox xmlns fill stroke stroke-width stroke-linejoin stroke-linecap stroke-dasharray opacity fill-opacity stroke-opacity points x y x1 y1 x2 y2 cx cy r rx ry d transform font-size font-weight text-anchor dominant-baseline marker-end marker-start refx refy markerwidth markerheight orient preserveaspectratio style type data-save data-save-zip data-save-join data-files data-play open".split(" "));
 function safeUrl(value, forImage) {
   const v = String(value || "").trim();
   if (!v) return null;

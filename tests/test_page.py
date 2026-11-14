@@ -799,6 +799,25 @@ class PageTest(unittest.TestCase):
         p.click("text=Bad")
         self.assertEqual(p.locator(".play-frame iframe").count(), 1)
 
+    def test_panel_sections_open_and_close(self):
+        data = seed()
+        data["config/page"]["panels"] = [{"id": "play", "title": "Try the game", "html":
+            '<details><summary>How to play</summary><p>The keys.</p><p><button data-play="game/build.html">Play here</button></p></details>'
+            '<details open ontoggle="window.__pwned=1"><summary>Known issues</summary><p>None yet.</p></details>'}]
+        p = self.open(data)
+        panel = p.locator(".panel")
+        self.assertEqual(panel.locator("details").count(), 2, "sections stay sections")
+        self.assertTrue(panel.locator("text=The keys.").is_hidden(), "a section starts closed")
+        self.assertTrue(panel.locator("text=None yet.").is_visible(), "unless it says open")
+        panel.locator("summary", has_text="How to play").click()
+        self.assertTrue(panel.locator("text=The keys.").is_visible())
+        p.click("text=Play here")
+        self.assertTrue(p.locator(".play-frame iframe").get_attribute("src").endswith("game/build.html"), "a button inside still works")
+        panel.locator("summary", has_text="Known issues").click()
+        self.assertTrue(panel.locator("text=None yet.").is_hidden())
+        self.assertEqual(panel.locator("[ontoggle]").count(), 0)
+        self.assertIsNone(p.evaluate("window.__pwned || null"))
+
     def test_a_failed_download_says_why(self):
         data = seed()
         data["config/page"]["panels"] = [{"id": "dl", "title": "Files", "html": '<p><button data-save-zip="refs.zip" data-files="">Download refs</button> '

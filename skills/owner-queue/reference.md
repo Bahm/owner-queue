@@ -108,7 +108,7 @@ Lint also warns on a field name the page doesn't read (it would never show), nam
 
 ## HTML allowlist
 
-`context`, `lede`, feed `html` and panel `html` keep: `time` (with `datetime`), `p`, `ul`, `ol`, `li`, `b`, `strong`, `i`, `em`, `u`, `s`, `code`, `pre`, `kbd`, `blockquote`, `q`, `a`, `img`, `figure`, `figcaption`, `table` (scrolls sideways when wide) and its parts, `dl`/`dt`/`dd`, `h3`–`h5`, `hr`, `br`, `span`, `div`, `small`, `sub`, `sup`, `mark`, `abbr`, `button` (with the `data-` attributes above), and inline SVG shapes and text.
+`context`, `lede`, feed `html` and panel `html` keep: `time` (with `datetime`), `p`, `ul`, `ol`, `li`, `b`, `strong`, `i`, `em`, `u`, `s`, `code`, `pre`, `kbd`, `blockquote`, `q`, `a`, `img`, `figure`, `figcaption`, `table` (scrolls sideways when wide) and its parts, `dl`/`dt`/`dd`, `h3`–`h5`, `hr`, `br`, `details` with its `summary` (a section that opens and closes; closed unless it has `open`), `span`, `div`, `small`, `sub`, `sup`, `mark`, `abbr`, `button` (with the `data-` attributes above), and inline SVG shapes and text.
 
 Everything else is stripped: scripts, event handlers, frames, forms and styles that load URLs. Links open in a new tab and must be `https:`, `mailto:` or relative. Pictures must be relative, `https:`, or (refused by lint) `data:image`.
 
