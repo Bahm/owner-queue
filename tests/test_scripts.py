@@ -138,7 +138,7 @@ class QueueScript(unittest.TestCase):
             (dump / f"{path}.json").write_text(json.dumps(body))
         closers = {
             "close": item_body(self.run_q("close", "t", "G1", "--outcome", "Round 1 outcome.", "--undo", "Revert it.", "--version", "2")),
-            "take-in": item_body(self.run_q("take-in", "t", dump, "--pins", "G1=2", "--outcome", "G1=Round 1 outcome.")),
+            "take-in": item_body(self.run_q("take-in", "t", dump, "--pins", "G1=2 u_des=new", "--outcome", "G1=Round 1 outcome.")),
         }
         reasked = item_body(self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "3", "--reask", "--answers", dump))
         for closer, closed in closers.items():
@@ -427,6 +427,22 @@ class QueueScript(unittest.TestCase):
         self.run_q("config", "t", "--panels", panels, "--allow-you")
         self.run_q("config", "t", "--lede", "<b>14 November:</b> For the designer: G52.")
 
+    def test_take_in_needs_people_and_receipts_listed(self):
+        # The God Game queue, 14 November: take-in ran on a listing without receipts/, and its unpinned receipt refused
+        # the whole batch at the store. Without people/, no Submit is seen and a collaborator's answers look unfinished.
+        self.init()
+        answers = {"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)},
+                   "people/u_des/answers/g1": {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(30)}}
+        r = self.run_q("take-in", "t", self.listing(answers), "--pins", "G1=1", ok=False)
+        self.assertIn("No people/ records", r.stderr)
+        d = self.listing({**answers, "people/u_des": {"submittedAt": iso(20)}})
+        self.assertIn('"G1=? u_des=?". No receipts/', self.run_q("take-in", "t", d, ok=False).stderr)
+        receipt = next(w for w in self.writes(self.run_q("take-in", "t", d, "--pins", "G1=1 u_des=141")) if w["collection"] == "receipts")
+        self.assertEqual(receipt["if_version"], 141)
+        d = self.listing({**answers, "people/u_des": {"submittedAt": iso(20)}, "receipts/u_other": {"readAt": iso(90)}})
+        receipt = next(w for w in self.writes(self.run_q("take-in", "t", d, "--pins", "G1=1")) if w["collection"] == "receipts")
+        self.assertNotIn("if_version", receipt, "receipts listed, none for them: created, no pin needed")
+
     def test_an_answer_saved_after_take_in_is_listed_once(self):
         # The God Game queue's G124 (14 November): the designer's note, edited 1.1 s after take-in closed it, was never
         # listed, since `answers` skipped every answer to a closed question. The page locks a closed question; a save
@@ -555,12 +571,17 @@ class QueueScript(unittest.TestCase):
         self.assertIn("G3 Height level: 16 m", out)
         self.assertIn("Still writing, saved since their last Submit, so not shown or taken in: Anything else, G2.", out)
         self.assertNotIn("half a thou", out); self.assertNotIn("in progr", out)
-        result = self.run_q("take-in", "t", d, "--pins", "G1=1 G2=1 G3=1", "--free", "u_des=1")
+        r = self.run_q("take-in", "t", d, "--pins", "G1=1 G2=1 G3=1", "--free", "u_des=1", ok=False)
+        self.assertIn('add --pins "u_des=?". No receipts/', r.stderr + r.stdout,
+                      "receipts not listed: a receipt that exists would refuse the whole batch unpinned (God Game, 14 November)")
+        result = self.run_q("take-in", "t", d, "--pins", "G1=1 G2=1 G3=1 u_des=new", "--free", "u_des=1")
+        receipt = next(w for w in self.writes(result) if w["collection"] == "receipts")
+        self.assertNotIn("if_version", receipt, "=new: the listing found no receipt, so it's created")
         written = {(w["collection"], w["doc_id"]) for w in self.writes(result)}
         self.assertIn(("items", "g1"), written); self.assertIn(("items", "g3"), written)
         self.assertNotIn(("items", "g2"), written, "a question stays open while its answer is being written")
         self.assertNotIn(("people/u_des/answers", "anything-else"), written, "a note still being typed is never cleared")
-        result = self.run_q("take-in", "t", d, "--pins", "G1=1 G2=1 G3=1", "--free", "u_des=1", "--unsubmitted", "u_des")
+        result = self.run_q("take-in", "t", d, "--pins", "G1=1 G2=1 G3=1 u_des=new", "--free", "u_des=1", "--unsubmitted", "u_des")
         written = {(w["collection"], w["doc_id"]) for w in self.writes(result)}
         self.assertIn(("items", "g2"), written, "taken in anyway when the owner asks")
         self.assertIn(("people/u_des/answers", "anything-else"), written)

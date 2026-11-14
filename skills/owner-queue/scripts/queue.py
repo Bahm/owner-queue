@@ -911,6 +911,12 @@ def cmd_take_in(a):
         die(f"No items under {root}/items: list `items`, `people`, `receipts` and each `people/<uid>/answers` with out_dir {root} first.")
     if missing:
         die("List these with out_dir " + str(root) + " first: " + ", ".join(f"people/{u}/answers" for u in missing))
+    if any(u != owner for u in uids) and not people:   # the page writes a person's record with their first answer
+        die(f"No people/ records under {root}: list `people` with out_dir {root} first. Without them no Submit is seen, "
+            "and every collaborator's answer looks unfinished.")
+    # A collection with nothing in it leaves no folder, so a missing receipts/ is either "not listed" or "none yet":
+    # each receipt then needs a pin, =new for none. Unpinned, a receipt that existed refused the whole batch (God Game, 14 November).
+    receipts_listed = (root / "receipts").is_dir()
     free_versions = dict(pair.partition("=")[::2] for pair in a.free or [])
     plans = {id_for(state, ref): text.strip() for ref, text in (pair.partition("=")[::2] for pair in a.outcome or [])}
     # The store takes a write to an existing record only pinned to its version; the listing prints the versions.
@@ -969,10 +975,13 @@ def cmd_take_in(a):
     unrepaired = [it.get("ref") or i for i, it in stray_status.items() if not it.get("takenAt") and i not in taken]
     unread = [uid for uid in uids if real_time((people.get(uid) or {}).get("submittedAt"))
               and not ((receipts.get(uid) or {}).get("readAt", "") >= real_time(people[uid]["submittedAt"]))]
-    need = [items[i].get("ref") or i for i in [*taken, *marks, *repair] if i not in pins] + [u for u in unread if u in receipts and u not in pins]
+    need = [items[i].get("ref") or i for i in [*taken, *marks, *repair] if i not in pins] + \
+        [u for u in unread if (u in receipts or not receipts_listed) and u not in pins]
     if need:
         die("Pin each write to the version the listing showed (a store write to an existing record needs it): "
-            f"add --pins \"{' '.join(f'{n}=?' for n in need)}\"")
+            f"add --pins \"{' '.join(f'{n}=?' for n in need)}\"" +
+            ("" if receipts_listed or not unread else f". No receipts/ under {root}: list `receipts` with out_dir {root} for "
+             "their versions. If that listing finds none, pin each person =new."))
     refs = []
     for item_id in taken:
         data = {"status": "done", "takenAt": stamp(t), "order": int(t.timestamp()),
@@ -1000,7 +1009,8 @@ def cmd_take_in(a):
         die("--outcome for questions without a current answer to take in: " + ", ".join(stray) + ". Close those with `close`.")
     read = []
     for uid in unread:
-        out.add("set", "receipts", uid, {"readAt": stamp(t)}, pins.get(uid) if uid in receipts else None)
+        pin = pins.get(uid) if uid in receipts or not receipts_listed else None
+        out.add("set", "receipts", uid, {"readAt": stamp(t)}, None if pin == "new" else pin)
         read.append(who(uid).lower())
     # No For information line: answered questions show under Done, and the receipt tells each sender
     # "Claude took in your answers on <time>" (the owner, O14 and O15).
