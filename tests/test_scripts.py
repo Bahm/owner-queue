@@ -398,6 +398,35 @@ class QueueScript(unittest.TestCase):
         r = self.run_q("config", "t", "--undelegate", "--version", "3")
         self.assertNotIn("delegated", json.loads(Path(self.writes(r)[0]["file_path"]).read_text()))
 
+    def test_you_in_a_shared_queues_news(self):
+        # The owner, 23 October: in a queue shared with anyone else, "you" belongs only in a question with a `for`, since
+        # each reader takes it as themselves. Eight God Game news lines broke that rule later, so the script refuses it.
+        self.init()
+        self.run_q("fyi", "t", "<p>Nothing is needed from you.</p>")   # nobody else reads it yet
+        d = self.listing({"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)},
+                          "people/u_des": {"lastAnswerAt": iso(30)},
+                          "people/u_des/answers/g1": {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(30)},
+                          "people/u_owner/answers/g1": {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(30)}})
+        self.run_q("answers", "t", d)
+        for text, word in (("<p>Merged, as your G136 note asked. Nothing is needed from you.</p>", "your"),
+                           ("You'll see it on the next build.", "You")):
+            r = self.run_q("fyi", "t", text, ok=False)
+            self.assertIn(f"“{word}” in", r.stdout)
+            self.assertEqual(self.writes(r), [], "nothing written")
+        self.assertIn("“your” in “Merged, as your G136 note asked.”", self.run_q("fyi", "t", "<p>Merged, as your G136 note asked.</p>", ok=False).stdout)
+        for quoted in ('<p>The designer asked: “Can you add sections?”</p>', '<p>The note said "thank you".</p>',
+                       "<blockquote>Do you mean the cliffs?</blockquote><p>The owner answered.</p>",
+                       "<p>A layout for the bayou on YouTube.</p>"):
+            self.run_q("fyi", "t", quoted)
+        self.run_q("fyi", "t", "<p>Thank you all.</p>", "--allow-you")
+        r = self.run_q("config", "t", "--lede", "<b>14 November:</b> Yours: G52.", ok=False)
+        self.assertIn("lede: “Yours”", r.stdout)
+        panels = self.tmp / "panels.json"
+        panels.write_text(json.dumps([{"id": "play", "title": "Try the game", "html": "<p>Your build is ready.</p>"}]))
+        self.assertIn("panel play: “Your”", self.run_q("config", "t", "--panels", panels, ok=False).stdout)
+        self.run_q("config", "t", "--panels", panels, "--allow-you")
+        self.run_q("config", "t", "--lede", "<b>14 November:</b> For the designer: G52.")
+
     def test_verify(self):
         self.init()
         self.assertIn("OK", self.run_q("verify", "t", "v1").stdout)
