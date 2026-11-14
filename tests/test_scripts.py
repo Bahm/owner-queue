@@ -427,6 +427,34 @@ class QueueScript(unittest.TestCase):
         self.run_q("config", "t", "--panels", panels, "--allow-you")
         self.run_q("config", "t", "--lede", "<b>14 November:</b> For the designer: G52.")
 
+    def test_an_answer_saved_after_take_in_is_listed_once(self):
+        # The God Game queue's G124 (14 November): the designer's note, edited 1.1 s after take-in closed it, was never
+        # listed, since `answers` skipped every answer to a closed question. The page locks a closed question; a save
+        # already on its way still lands after it.
+        self.init()
+        taken = iso(10)
+        def listing(edited_at, submitted_at, taken_at=taken):
+            return self.listing({"items/g1": {**GOOD, "ref": "G1", "status": "done", "askedAt": iso(60), "takenAt": taken_at},
+                                 "people/u_des": {"submittedAt": submitted_at},
+                                 "receipts/u_des": {"readAt": taken},
+                                 "people/u_des/answers/g1": {"choice": "", "choiceLabel": "", "note": "Why is it so steep?", "at": edited_at},
+                                 "people/u_owner/answers/g1": {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(20)}})
+        late = iso(10 - 1 / 60)
+        r = self.run_q("answers", "t", listing(late, iso(2)))
+        self.assertIn("G1 Height level: (no choice, a note) (saved after it was taken in", r.stdout)
+        self.assertIn("Why is it so steep?", r.stdout)
+        self.assertNotIn("16 m", r.stdout, "the owner's answer, taken in before, isn't listed again")
+        self.assertIn("Still writing", self.run_q("answers", "t", listing(late, iso(11))).stdout, "an edit not yet submitted waits")
+        self.assertNotIn("G1", self.run_q("answers", "t", listing(iso(10 + 1 / 60), iso(2))).stdout, "saved before take-in: taken in")
+        r = self.run_q("take-in", "t", listing(late, iso(2)), "--pins", "G1=4 u_des=2", "--outcome", "G1=The slope is halved.")
+        self.assertIn("Taken in again: G1", r.stdout)
+        self.assertIn("Closes 0 answered questions", r.stdout)
+        body = json.loads(Path(next(w for w in self.writes(r) if w["collection"] == "items")["file_path"]).read_text())
+        self.assertGreater(body["takenAt"], late)
+        self.assertEqual(body["outcome"], "The slope is halved.")
+        self.assertNotIn("Why is it so steep?", self.run_q("answers", "t", listing(late, iso(2), body["takenAt"])).stdout,
+                         "listed once: once taken in again, it isn't listed")
+
     def test_verify(self):
         self.init()
         self.assertIn("OK", self.run_q("verify", "t", "v1").stdout)

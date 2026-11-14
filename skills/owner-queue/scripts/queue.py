@@ -796,6 +796,13 @@ def answer_uids(root):
     return uids, [u for u in uids if not (Path(root) / "people" / u / "answers").is_dir()]
 
 
+def after_taken(item, at):
+    """An answer saved after its question was taken in. The page locks a closed question, but a save already on its way
+    lands after take-in: on the God Game queue, G124's note, edited 1.1 s after it, was never listed (14 November)."""
+    taken = parse_time(real_time(item.get("takenAt")))
+    return item.get("status") == "done" and bool(taken) and (parse_time(at) or taken) > taken
+
+
 def finished(uid, ans, owner, people, anyway=()):
     """A collaborator's answer is theirs to finish until they press Submit: it counts only if it was saved before their last
     Submit (the owner, O26: reading earlier is reading before they've fleshed it out). The owner's own answers count without one:
@@ -845,7 +852,8 @@ def cmd_answers(a):
             if not finished(uid, ans, owner, people, a.unsubmitted or ()):
                 if item_id == FREE_ID and str(ans.get("note", "")).strip():
                     writing.append("Anything else")
-                elif item_id in items and items[item_id].get("status") not in ("done", "waiting") and (ans.get("choice") or str(ans.get("note", "")).strip()):
+                elif item_id in items and (items[item_id].get("status") not in ("done", "waiting") or after_taken(items[item_id], real_time(ans.get("at")))) \
+                        and (ans.get("choice") or str(ans.get("note", "")).strip()):
                     writing.append(items[item_id].get("ref") or item_id)
                 continue
             if item_id == FREE_ID:
@@ -863,14 +871,17 @@ def cmd_answers(a):
             if at is None:
                 print(f"- {item.get('ref') or item_id}: an answer without a valid time: ignored.")
                 continue
-            if (item.get("askedAt") and at < str(item["askedAt"])) or item.get("status") == "done":
+            late = after_taken(item, at)
+            if (item.get("askedAt") and at < str(item["askedAt"])) or (item.get("status") == "done" and not late):
                 continue
             label = choice_label(item, ans)
             note = str(ans.get("note", "")).strip()
             if not label and label is not None and not note:
                 continue   # cleared
             shown = "(a choice that isn't on the question: ignored)" if label is None else label or "(no choice, a note)"
-            print(f"- {item.get('ref') or item_id} {item.get('title') or ''}: {shown}" + (f"\n    note, their words: “{note[:1500]}”" if note else ""))
+            print(f"- {item.get('ref') or item_id} {item.get('title') or ''}: {shown}" +
+                  (f" (saved after it was taken in at {real_time(item.get('takenAt'))}, so not yet acted on: take-in takes it in again)" if late else "") +
+                  (f"\n    note, their words: “{note[:1500]}”" if note else ""))
         if writing:
             print(f"- Still writing, saved since their last Submit, so not shown or taken in: {', '.join(writing)}. "
                   "They press Submit when they're done; if the owner asks, add --unsubmitted " + uid + ".")
@@ -907,7 +918,7 @@ def cmd_take_in(a):
     t = now()
     who = lambda uid: "The owner" if uid == owner else "A collaborator"
     out = Out(state, "take-in")
-    taken, inputs, kept, unsaved = {}, [], [], []
+    taken, inputs, kept, unsaved, again = {}, [], [], [], set()
     replies = {id_for(state, ref): text.strip() for ref, text in (pair.partition("=")[::2] for pair in a.reply or [])}
     marks = {}   # item id -> its `read` map: input answers on a question someone else decides, marked read (O16)
     for uid in uids:
@@ -927,14 +938,18 @@ def cmd_take_in(a):
                         unsaved.append((uid, keep))
                 continue
             item = items.get(item_id)
-            if not item or item.get("status") in ("done", "waiting"):
-                continue
             at = real_time(ans.get("at"))
+            if not item or item.get("status") == "waiting" or (item.get("status") == "done" and not after_taken(item, at)):
+                continue
             if at is None or (item.get("askedAt") and at < str(item["askedAt"])):
                 continue
             label = choice_label(item, ans)
             if label is None or (not label and not note):
                 continue   # a choice the question doesn't have, or cleared
+            if item.get("status") == "done":
+                again.add(item_id)   # saved after take-in: stamped again, so `answers` lists it once
+                taken.setdefault(item_id, uid)
+                continue
             decider = item.get("for")
             if decider and (decider == "owner") != (uid == owner):
                 # Input, not a decision: it stays open, and the page tells its writer it was read.
@@ -965,7 +980,8 @@ def cmd_take_in(a):
         if plans.get(item_id):
             data["outcome"] = plans[item_id]
         out.add("update", "items", item_id, data, pins[item_id])
-        refs.append(items[item_id].get("ref") or item_id)
+        if item_id not in again:
+            refs.append(items[item_id].get("ref") or item_id)
     for item_id in repair:
         item = items[item_id]
         order = item.get("order") if isinstance(item.get("order"), int) and item["order"] > 10 ** 9 else None
@@ -990,6 +1006,9 @@ def cmd_take_in(a):
     # "Claude took in your answers on <time>" (the owner, O14 and O15).
     print(f"Closes {len(refs)} answered question{'s' * (len(refs) != 1)}" + (f" ({', '.join(refs)})" if refs else "") +
           (f", receipts for {', '.join(read)}" if read else "") + (f", {len(kept)} Anything else saved and cleared" if kept else "") + ".")
+    if again:
+        print("Taken in again: " + ", ".join(items[i].get("ref") or i for i in sorted(again)) + ", answered after they were taken in "
+              "(a save already on its way when they closed). Act on that answer as on any other; --outcome replaces the old outcome.")
     if repair:
         print("Done again: " + ", ".join(items[i].get("ref") or i for i in repair) + ", closed with a status the page doesn't know "
               f"({', '.join(sorted({str(stray_status[i]['status']) for i in repair}))}), so it showed them open with their answers. "
