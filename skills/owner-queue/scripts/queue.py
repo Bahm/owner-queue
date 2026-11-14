@@ -9,8 +9,8 @@ ${XDG_CACHE_HOME:-~/.cache}/owner-queue/<slug>/state.json.
     queue.py init TITLE [--prefix G] [--sound chime|beeps|divine|none]   render the page, start the state
     queue.py bind SLUG --url URL --artifact-id ID --owner UID --version V   after the first publish
     queue.py published SLUG VERSION_ID           record a version this session published
-    queue.py verify SLUG VERSION_ID              before acting on a wake: is the live page still ours?
-    queue.py config SLUG [--lede HTML] [--eyebrow T] [--sound S] [--panels FILE]
+    queue.py verify SLUG VERSION_ID [--store DIR]   before acting on a wake: is the live page still ours?
+    queue.py config SLUG [--lede HTML|@FILE] [--eyebrow T|@FILE] [--sound S] [--panels FILE]
                          [--delegate "WHAT COLLABORATORS MAY DECIDE"] [--undelegate]
                          [--unsafe-unattended-wake] [--unsafe-collaborator-wake] [--safe] [--allow-you] [--version N]
     queue.py ask SLUG ITEM.json [--version N] [--reask]   add a question, or change one
@@ -337,6 +337,8 @@ def lint_item(item, state=None):
     for field in HTML_FIELDS:
         if field in item:
             lint_html(f"{ref}.{field}", item[field], errors, warnings)
+    for where, text in item_texts(item, ref):
+        lint_path(where, text, errors)
     plain = [item.get(f) for f in ("title", "ask", "pick", "priorityReason", "outcome", "cost", "effort", "undo", "unblocks", "needs")]
     plain += [s.get("text") for s in steps]
     plain += [text for choice in choices for text in (choice.get("label"), choice.get("cost"), *listed(choice.get("pros")), *listed(choice.get("cons")))]
@@ -360,12 +362,62 @@ def is_file(text):
         return False
 
 
+PATH_ONLY = re.compile(r"~/\S*|\.{0,2}/\S*/\S*|\.{1,2}/\S*|\S+\.(?:html?|md|json|txt)", re.I)
+READ_IT = "Pass the text itself, or @FILE to read it from a file"
+
+
+def lone_path(text):
+    """The text, when all of it is a file's path or name, or an @FILE nobody read: the page shows the path, not what the
+    file holds. God Game's status line showed one for a day, since `config --lede` stored @FILE as given (14 November)."""
+    plain = strip_tags(text) if isinstance(text, str) else ""
+    if not plain or re.search(r"\s", plain):
+        return ""
+    bare = plain[1:] if plain.startswith("@") else plain
+    return plain if bare and (PATH_ONLY.fullmatch(bare) or (bare != plain or "/" in bare) and is_file(bare)) else ""
+
+
+def lint_path(where, text, errors, fix="Put the text itself there"):
+    found = lone_path(text)
+    if found:
+        errors.append(f"{where}: {found!r} is a file's name, and the page would show the name, not what the file holds. {fix}.")
+
+
+def item_texts(item, ref):
+    """Every text the page shows from a question. Not `steps[].command`, `prompt` or `source`: those hold paths on purpose."""
+    for field in ("title", "ask", "context", "pick", "priorityReason", "effort", "cost", "undo", "unblocks", "outcome", "needs", "input"):
+        yield f"{ref}.{field}", item.get(field)
+    for c in records(item.get("choices")):
+        for field in ("label", "cost"):
+            yield f"{ref}/{c.get('key')}.{field}", c.get(field)
+        for field in ("pros", "cons"):
+            for sentence in listed(c.get(field)):
+                yield f"{ref}/{c.get('key')}.{field}", sentence
+    for s in records(item.get("steps")):
+        yield f"{ref} step", s.get("text")
+    if isinstance(item.get("secondOpinion"), dict):
+        yield f"{ref}.secondOpinion", item["secondOpinion"].get("label")
+
+
+def config_texts(c):
+    yield "lede", c.get("lede")
+    yield "eyebrow", c.get("eyebrow")
+    for p in records(c.get("panels")):
+        for field in ("title", "note", "html"):
+            yield f"panel {p.get('id')}.{field}", p.get(field)
+
+
+def store_paths(root):
+    """Where a store listing (config/page, items, feed) holds a page-shown text that is only a path."""
+    texts = list(config_texts(read_dir(root, "config").get("page") or {}))
+    for doc_id, item in read_dir(root, "items").items():
+        texts += item_texts(item, item.get("ref") or doc_id) if isinstance(item, dict) else []
+    texts += [(f"feed {doc_id}", entry.get("html")) for doc_id, entry in read_dir(root, "feed").items() if isinstance(entry, dict)]
+    return [where for where, text in texts if lone_path(text)]
+
+
 def lint_feed(entry):
     errors, warnings = [], []
-    text = str(entry.get("html", "")).strip()
-    if "<" not in text and re.fullmatch(r"\S+", text) and (re.search(r"\.(html?|md|json|txt)$", text, re.I) or is_file(text)):
-        errors.append(f"feed: {text!r} is a file's name, and the page would show the name. "
-                      f"Pass the HTML itself, or @FILE to read it from a file.")
+    lint_path("feed", entry.get("html", ""), errors, READ_IT)
     lint_html("feed", entry.get("html", ""), errors, warnings)
     if parse_time(entry.get("at")) is None:
         errors.append("feed: `at` must be UTC ending in Z, from the clock, never typed.")
@@ -496,11 +548,28 @@ def cmd_verify(a):
         die(f"STOP: the live page is {a.version}, {where}; the last one you published is {known[-1]}. "
             f"Someone with edit access may have changed the page or its store rules. Don't act on the wake: tell the owner.")
     print(f"OK: the live page is {a.version}, the version you last published.")
+    if a.store:
+        found = store_paths(a.store)
+        if found:
+            print(f"Fix: the page shows a file's name, not what the file holds, in {', '.join(found)}. "
+                  "Write the text itself there (config, ask --version, or fyi and prune).")
+
+
+def text_arg(value, flag):
+    """HTML|@FILE: the text itself, or the file it names, read."""
+    if value is None or not value.startswith("@"):
+        return value
+    path = Path(value[1:]).expanduser()
+    try:
+        return path.read_text()
+    except OSError as e:
+        die(f"{flag} {value}: can't read {path} ({e.strerror}). Not written.")
 
 
 def cmd_config(a):
     state = load_state(a.slug)
     c = state["config"]
+    a.lede, a.eyebrow = text_arg(a.lede, "--lede"), text_arg(a.eyebrow, "--eyebrow")
     if a.lede is not None:
         c["lede"] = a.lede
     if a.eyebrow is not None:
@@ -545,6 +614,11 @@ def cmd_config(a):
         lint_you(state, "lede", a.lede, errors, a.allow_you)
         if not report(errors, warnings, checklist=False):
             die("Not written.")
+    errors = []   # the whole config is written, so a path left in it by an earlier write is refused too
+    for where, text in config_texts(c):
+        lint_path(where, text, errors, "Put the HTML itself in the panels file" if where.startswith("panel") else READ_IT)
+    if not report(errors, [], checklist=False):
+        die("Not written.")
     save_state(state)
     out = Out(state, "config")
     out.add("set", "config", "page", c, a.version if a.version is not None else state.get("configVersion"))
@@ -595,6 +669,7 @@ def reask_reply(state, a, doc_id, item, errors, warnings):
                             "what changed, or why not; the rest belongs in the question." + later)
         else:
             lint_times(f"{ref} reply", [text], warnings)
+            lint_path(f"{ref} reply", text, errors)
     if not a.answers:
         if not a.no_reply:
             problems.append(f"{ref}: a re-ask needs --answers DIR, the folder the answers were listed into, to find the note that led to it, "
@@ -727,6 +802,11 @@ def cmd_close(a):
             "priority": {"__delete__": True}, "priorityReason": {"__delete__": True}}
     if a.undo:
         data["undo"] = a.undo
+    errors = []
+    lint_path("--outcome", a.outcome, errors)
+    lint_path("--undo", a.undo, errors)
+    if not report(errors, [], checklist=False):
+        die("Not written.")
     doc_id = id_for(state, a.id)
     out = Out(state, "close-" + doc_id)
     out.add("update", "items", doc_id, data, a.version)
@@ -746,7 +826,7 @@ def cmd_wait(a):
 
 def cmd_fyi(a):
     state = load_state(a.slug)
-    text = Path(a.html[1:]).read_text() if a.html.startswith("@") else a.html
+    text = text_arg(a.html, "fyi")
     t = now()
     entry = {"at": stamp(t), "html": text}
     errors, warnings = lint_feed(entry)
@@ -926,6 +1006,12 @@ def cmd_take_in(a):
     out = Out(state, "take-in")
     taken, inputs, kept, unsaved, again = {}, [], [], [], set()
     replies = {id_for(state, ref): text.strip() for ref, text in (pair.partition("=")[::2] for pair in a.reply or [])}
+    errors = []
+    for flag, texts in (("--outcome", plans), ("--reply", replies)):
+        for item_id, text in texts.items():
+            lint_path(f"{item_id} {flag}", text, errors)
+    if not report(errors, [], checklist=False):
+        die("Nothing written.")
     marks = {}   # item id -> its `read` map: input answers on a question someone else decides, marked read (O16)
     for uid in uids:
         for item_id, ans in sorted(read_dir(root, f"people/{uid}/answers").items()):
@@ -1287,7 +1373,9 @@ def main():
     p.add_argument("--owner", required=True); p.add_argument("--version"); p.set_defaults(fn=cmd_bind)
     p = sub.add_parser("config-saved"); p.add_argument("slug"); p.add_argument("version"); p.set_defaults(fn=cmd_config_saved)
     p = sub.add_parser("published"); p.add_argument("slug"); p.add_argument("version"); p.set_defaults(fn=cmd_published)
-    p = sub.add_parser("verify"); p.add_argument("slug"); p.add_argument("version"); p.set_defaults(fn=cmd_verify)
+    p = sub.add_parser("verify"); p.add_argument("slug"); p.add_argument("version")
+    p.add_argument("--store", metavar="DIR", help="a listing of config, items and feed: name any text on the page that is only a file's name")
+    p.set_defaults(fn=cmd_verify)
     p = sub.add_parser("config"); p.add_argument("slug"); p.add_argument("--lede"); p.add_argument("--eyebrow")
     p.add_argument("--sound", choices=SOUNDS); p.add_argument("--panels")
     p.add_argument("--no-urgent", action="store_true"); p.add_argument("--urgent", action="store_true")

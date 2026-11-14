@@ -443,6 +443,52 @@ class QueueScript(unittest.TestCase):
         receipt = next(w for w in self.writes(self.run_q("take-in", "t", d, "--pins", "G1=1")) if w["collection"] == "receipts")
         self.assertNotIn("if_version", receipt, "receipts listed, none for them: created, no pin needed")
 
+    def test_a_text_that_is_only_a_path(self):
+        # The God Game queue, 14 November: `config --lede @FILE` stored the reference as given, and the status line showed
+        # the path for a day. --lede and --eyebrow read @FILE now, and no text the page shows may be only a file's name.
+        self.init()
+        lede = self.tmp / "lede-1114d.html"
+        lede.write_text("<b>14 November:</b> Nothing open.\n")
+        w = self.writes(self.run_q("config", "t", "--lede", "@" + str(lede), "--eyebrow", "@" + str(lede)))[0]
+        page = json.loads(Path(w["file_path"]).read_text())
+        self.assertEqual((page["lede"], page["eyebrow"]), (lede.read_text(),) * 2, "@FILE is read, as fyi reads it")
+        self.assertIn("can't read", self.run_q("config", "t", "--lede", "@" + str(self.tmp / "gone.html"), ok=False).stderr)
+        for flag, text in (("--lede", str(lede)), ("--lede", "<p>~/tmp/q/drafts/lede.html</p>"), ("--eyebrow", "~/q/eyebrow.txt")):
+            r = self.run_q("config", "t", flag, text, ok=False)
+            self.assertIn("a file's name", r.stdout, f"{flag} {text}")
+            self.assertEqual(self.writes(r), [], "nothing written")
+        panels = self.tmp / "panels.json"
+        panels.write_text(json.dumps([{"id": "play", "title": "Try the game", "html": "game/q/build.html"}]))
+        self.assertIn("panel play.html", self.run_q("config", "t", "--panels", panels, ok=False).stdout)
+        state = self.tmp / "owner-queue/t/state.json"
+        body = json.loads(state.read_text()); body["config"]["lede"] = "@/home/x/lede.html"; state.write_text(json.dumps(body))
+        self.assertIn("lede: '@/home/x/lede.html'", self.run_q("config", "t", "--sound", "beeps", ok=False).stdout,
+                      "the whole config is written, so a path an earlier write left is refused too")
+        self.run_q("config", "t", "--lede", "<b>14 November:</b> Nothing open. Notes: ~/q/notes.md, and A/B.")
+        bad = {**GOOD, "title": "~/Projects/roc-ui/q/g9.md",
+               "choices": [{**GOOD["choices"][0], "label": "@./drafts/16.html"}, GOOD["choices"][1]]}
+        r = self.run_q("ask", "t", self.item_file(bad), ok=False)
+        self.assertIn("G1.title", r.stdout)
+        self.assertIn("G1/16.label", r.stdout)
+        self.run_q("ask", "t", self.item_file({**GOOD, "group": "yours", "title": "/loop", "source": "~/q/report.md",
+                                               "prompt": "~/q/prompt.txt", "steps": [{"text": "Run it.", "command": "~/q/run.sh"}]}))
+        self.assertIn("can't read", self.run_q("fyi", "t", "@" + str(self.tmp / "gone.html"), ok=False).stderr, "not a traceback")
+        self.assertIn("--outcome: '~/q/g1-outcome.md'", self.run_q("close", "t", "G1", "--outcome", "~/q/g1-outcome.md", "--version", "2", ok=False).stdout)
+        took = {"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)},
+                "people/u_owner/answers/g1": {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(30)}}
+        r = self.run_q("take-in", "t", self.listing(took), "--pins", "G1=1", "--outcome", "G1=@drafts/g1.html", ok=False)
+        self.assertIn("g1 --outcome", r.stdout)
+        self.assertEqual(self.writes(r), [], "nothing written")
+        d = self.listing({"config/page": {"lede": "@/home/x/lede.html", "eyebrow": "Test"},
+                          "items/g1": {**GOOD, "ref": "G1", "status": "open", "context": "<p>/home/x/c.html</p>"},
+                          "items/g2": {**GOOD, "ref": "G2", "status": "open"},
+                          "feed/f1": {"at": iso(5), "html": "drafts/fyi.html"}, "feed/f2": {"at": iso(5), "html": "<p>Merged.</p>"}})
+        r = self.run_q("verify", "t", "v1", "--store", d)
+        self.assertIn("OK", r.stdout)
+        self.assertIn("in lede, G1.context, feed f1.", r.stdout)
+        self.assertNotIn("/home/x", r.stdout, "where, never the store's text")
+        self.assertNotIn("Fix", self.run_q("verify", "t", "v1", "--store", self.listing({"items/g2": {**GOOD, "ref": "G2"}})).stdout)
+
     def test_an_answer_saved_after_take_in_is_listed_once(self):
         # The God Game queue's G124 (14 November): the designer's note, edited 1.1 s after take-in closed it, was never
         # listed, since `answers` skipped every answer to a closed question. The page locks a closed question; a save

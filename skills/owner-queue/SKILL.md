@@ -83,9 +83,10 @@ Write the item as JSON (fields in [reference.md](reference.md)) and run `Q ask <
 
 ## For information, Anything else and the status line
 
-- `Q fyi <slug> "<html>"` (or `@FILE` to read the HTML from a file; a bare file name is refused, since the page would show the name) reports news that isn't about a question: a build, a report, a status change. Answered questions and what's done about them show under Done. The script stamps it. The page shows 48 hours of entries. `Q prune` deletes older ones; run it at each housekeeping.
+- `Q fyi <slug> "<html>"` (or `@FILE` to read the HTML from a file) reports news that isn't about a question: a build, a report, a status change. Answered questions and what's done about them show under Done. The script stamps it. The page shows 48 hours of entries. `Q prune` deletes older ones; run it at each housekeeping.
 - Clear "Anything else" once it's taken in (`take-in` saves and clears it; the receipt tells the sender). Save a pasted report to a file before clearing it.
-- `Q config <slug> --lede "<b>17 October:</b> …"` sets the dated status line: what's open and what's running, in one or two sentences.
+- `Q config <slug> --lede "<b>17 October:</b> …"` (or `@FILE`) sets the dated status line: what's open and what's running, in one or two sentences.
+- A text the page shows that is only a file's name or path (`@~/q/lede.html`, `drafts/fyi.html`) is refused by `ask`, `fyi`, `config`, `close` and `take-in`: the page would show the name, not what the file holds. A step's `command`, a `prompt` and a `source` may be paths.
 
 ## Submit, and the unsafe flags
 
@@ -98,7 +99,7 @@ By default, anyone the queue is shared with can press Submit. It only marks thei
 With the wake flag on, run as a background task: `python3 "${CLAUDE_SKILL_DIR}/scripts/queue_watch.py" --key <queueKey> --artifact-id <id>` (`Q status` prints both). It needs the queue open in Claude Desktop on the owner's laptop. It counts only marks written by the queue's own page. On its exit:
 
 1. **Re-arm the watcher first**, before anything else.
-2. **Check the live page:** Artifact `list` with the queue's `url` and `scope: "files"` names the live version in one line (never a full `read` for this); then `Q verify <slug> <version id>`. On STOP, someone with edit access may have changed the page or its store rules. Don't act; tell the owner.
+2. **Check the live page:** Artifact `list` with the queue's `url` and `scope: "files"` names the live version in one line (never a full `read` for this); then `Q verify <slug> <version id> --store <out_dir>`, with `config`, `items` and `feed` listed into the folder the answers go to; it names any text on the page that is only a file's name. On STOP, someone with edit access may have changed the page or its store rules. Don't act; tell the owner.
 3. Read the answers as above. Act on a submit only if it's the owner's, or the collaborator flag is on. Otherwise tell the owner it arrived.
 
 Never set up a scheduled model check to watch a queue: the owner ruled that out. It costs tokens even when nothing changed.
