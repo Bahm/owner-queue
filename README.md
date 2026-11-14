@@ -119,6 +119,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - `queue.py answers` lists an answer saved after its question was taken in, marked as such, and `take-in` takes it in again, so it's listed once. The page locks a closed question, but a save already on its way lands after it: on the God Game queue, a designer's note edited 1.1 seconds after take-in closed the question was never listed (2.20.1, the God Game session, 14 November).
 - `queue.py take-in` stops when `people` wasn't listed (no Submit would be seen) and asks for each receipt's pin when `receipts` wasn't, `=new` for one the listing didn't find. Before, it wrote the receipt unpinned, and a receipt that already existed made the store refuse the whole batch (2.20.2, the God Game session, 14 November).
 - `queue.py config --lede` and `--eyebrow` read `@FILE`, as `fyi` does, and `ask`, `fyi`, `config`, `close` and `take-in` refuse any text the page shows that is only a file's name or path; `verify --store` names one already on the page. `config --lede @FILE` had stored the reference as given, and the God Game status line showed a path for a day (2.21.0, the God Game session, 14 November).
+- The path check covers a question's `due` (`ask`, `wait --due`), which the page shows as "Scheduled for …" and a chip, and `verify --store` also checks the replies stored under someone's note (2.21.1, the God Game session, 14 November).
 
 ## License
 

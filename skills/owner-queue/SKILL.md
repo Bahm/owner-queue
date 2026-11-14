@@ -86,7 +86,7 @@ Write the item as JSON (fields in [reference.md](reference.md)) and run `Q ask <
 - `Q fyi <slug> "<html>"` (or `@FILE` to read the HTML from a file) reports news that isn't about a question: a build, a report, a status change. Answered questions and what's done about them show under Done. The script stamps it. The page shows 48 hours of entries. `Q prune` deletes older ones; run it at each housekeeping.
 - Clear "Anything else" once it's taken in (`take-in` saves and clears it; the receipt tells the sender). Save a pasted report to a file before clearing it.
 - `Q config <slug> --lede "<b>17 October:</b> …"` (or `@FILE`) sets the dated status line: what's open and what's running, in one or two sentences.
-- A text the page shows that is only a file's name or path (`@~/q/lede.html`, `drafts/fyi.html`) is refused by `ask`, `fyi`, `config`, `close` and `take-in`: the page would show the name, not what the file holds. A step's `command`, a `prompt` and a `source` may be paths.
+- A text the page shows that is only a file's name or path (`@~/q/lede.html`, `drafts/fyi.html`) is refused by `ask`, `fyi`, `config`, `close`, `wait` and `take-in`: the page would show the name, not what the file holds. A step's `command`, a `prompt` and a `source` may be paths.
 
 ## Submit, and the unsafe flags
 

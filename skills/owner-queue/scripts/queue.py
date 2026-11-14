@@ -383,8 +383,10 @@ def lint_path(where, text, errors, fix="Put the text itself there"):
 
 
 def item_texts(item, ref):
-    """Every text the page shows from a question. Not `steps[].command`, `prompt` or `source`: those hold paths on purpose."""
-    for field in ("title", "ask", "context", "pick", "priorityReason", "effort", "cost", "undo", "unblocks", "outcome", "needs", "input"):
+    """Every text the page shows from a question that a session writes. Not `steps[].command`, `prompt` or `source`: those
+    hold paths on purpose. Not `history`: those are people's own notes."""
+    for field in ("title", "ask", "context", "pick", "priorityReason", "effort", "cost", "undo", "unblocks", "outcome", "needs",
+                  "input", "due"):
         yield f"{ref}.{field}", item.get(field)
     for c in records(item.get("choices")):
         for field in ("label", "cost"):
@@ -396,6 +398,11 @@ def item_texts(item, ref):
         yield f"{ref} step", s.get("text")
     if isinstance(item.get("secondOpinion"), dict):
         yield f"{ref}.secondOpinion", item["secondOpinion"].get("label")
+    for field in ("read", "reasked"):   # the replies take-in and a re-ask write under someone's note
+        marks = item.get(field)
+        for mark in marks.values() if isinstance(marks, dict) else ():
+            if isinstance(mark, dict):
+                yield f"{ref} reply", mark.get("reply")
 
 
 def config_texts(c):
@@ -818,6 +825,10 @@ def cmd_wait(a):
     data = {"status": "waiting", "priority": {"__delete__": True}, "priorityReason": {"__delete__": True}}
     if a.due:
         data["due"] = a.due
+    errors = []
+    lint_path("--due", a.due, errors)
+    if not report(errors, [], checklist=False):
+        die("Not written.")
     doc_id = id_for(state, a.id)
     out = Out(state, "wait-" + doc_id)
     out.add("update", "items", doc_id, data, a.version)

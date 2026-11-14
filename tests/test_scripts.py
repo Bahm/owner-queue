@@ -479,13 +479,21 @@ class QueueScript(unittest.TestCase):
         r = self.run_q("take-in", "t", self.listing(took), "--pins", "G1=1", "--outcome", "G1=@drafts/g1.html", ok=False)
         self.assertIn("g1 --outcome", r.stdout)
         self.assertEqual(self.writes(r), [], "nothing written")
+        r = self.run_q("take-in", "t", self.listing(took), "--pins", "G1=1", "--reply", "G1=~/q/reply.md", ok=False)
+        self.assertIn("g1 --reply", r.stdout)
+        self.assertIn("G1 reply: '~/q/reply.md'", self.reask("--reply", "~/q/reply.md", ok=False).stdout)
+        self.assertIn("--due: '~/q/due.txt'", self.run_q("wait", "t", "G1", "--due", "~/q/due.txt", "--version", "2", ok=False).stdout)
+        self.assertIn("G1.due", self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "due": "~/q/due.txt"}), ok=False).stdout)
+        self.run_q("wait", "t", "G1", "--due", "after the playtest, 20 November", "--version", "2")
         d = self.listing({"config/page": {"lede": "@/home/x/lede.html", "eyebrow": "Test"},
                           "items/g1": {**GOOD, "ref": "G1", "status": "open", "context": "<p>/home/x/c.html</p>"},
                           "items/g2": {**GOOD, "ref": "G2", "status": "open"},
+                          "items/g3": {**GOOD, "ref": "G3", "status": "waiting", "due": "@due.txt",
+                                       "read": {"u_des": {"reply": "Done."}}, "reasked": {"u_des": {"reply": "drafts/r.md"}}},
                           "feed/f1": {"at": iso(5), "html": "drafts/fyi.html"}, "feed/f2": {"at": iso(5), "html": "<p>Merged.</p>"}})
         r = self.run_q("verify", "t", "v1", "--store", d)
         self.assertIn("OK", r.stdout)
-        self.assertIn("in lede, G1.context, feed f1.", r.stdout)
+        self.assertIn("in lede, G1.context, G3.due, G3 reply, feed f1.", r.stdout)
         self.assertNotIn("/home/x", r.stdout, "where, never the store's text")
         self.assertNotIn("Fix", self.run_q("verify", "t", "v1", "--store", self.listing({"items/g2": {**GOOD, "ref": "G2"}})).stdout)
 
