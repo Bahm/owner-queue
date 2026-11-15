@@ -38,7 +38,10 @@ class QueueScript(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
         self.env = {**os.environ, "XDG_CACHE_HOME": str(self.tmp)}
 
-    def run_q(self, *args, ok=True):
+    def run_q(self, *args, ok=True, holds=True):
+        # A change to the open questions needs --lede or --lede-holds (O29); tests about other things say it holds.
+        if holds and args and args[0] in ("ask", "close", "wait", "take-in") and not {"--lede", "--lede-holds"} & set(map(str, args)):
+            args = (*args, "--lede-holds")
         r = subprocess.run([sys.executable, str(QUEUE), *map(str, args)], env=self.env, capture_output=True, text=True)
         if ok:
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -443,6 +446,78 @@ class QueueScript(unittest.TestCase):
         receipt = next(w for w in self.writes(self.run_q("take-in", "t", d, "--pins", "G1=1")) if w["collection"] == "receipts")
         self.assertNotIn("if_version", receipt, "receipts listed, none for them: created, no pin needed")
 
+    def test_a_change_to_the_open_questions_comes_with_the_status_line(self):
+        # The owner, O29, for every queue: the God Game line fell behind its questions twice, each time after an ask
+        # that left it alone (13 and 15 November).
+        self.init()
+        self.run_q("config-saved", "t", "7")
+        f = self.item_file(GOOD)
+        r = self.run_q("ask", "t", f, ok=False, holds=False)
+        self.assertIn("changes which questions are open (G1)", r.stderr)
+        self.assertEqual(self.writes(r), [])
+        r = self.run_q("ask", "t", f, "--lede", "<b>15 November:</b> G1 is open.")
+        w = {x["collection"]: x for x in self.writes(r)}
+        self.assertEqual(w["config"]["if_version"], 7, "pinned to the config version the state knows, in the same batch")
+        self.assertEqual(json.loads(Path(w["config"]["file_path"]).read_text())["lede"], "<b>15 November:</b> G1 is open.")
+        self.assertIn("config-saved", r.stdout)
+        self.assertEqual(len(self.writes(self.run_q("ask", "t", f, "--version", "1", holds=False))), 1, "an edit opens or closes nothing")
+        for args in (("ask", "t", f, "--version", "1", "--reask", "--no-reply"), ("close", "t", "G1", "--version", "2", "--outcome", "Done."),
+                     ("wait", "t", "G1", "--version", "2")):
+            r = self.run_q(*args, ok=False, holds=False)
+            self.assertIn("--lede-holds", r.stderr, args[0])
+            self.assertEqual(self.writes(r), [], args[0])
+        r = self.run_q("wait", "t", "G1", "--version", "2", "--lede-holds", holds=False)
+        self.assertEqual([x["collection"] for x in self.writes(r)], ["items"], "the line still holds: nothing else written")
+        (self.tmp / "lede.html").write_text("<b>15 November:</b> Nothing is open.")
+        r = self.run_q("close", "t", "G1", "--version", "2", "--outcome", "Done.", "--lede", f"@{self.tmp / 'lede.html'}")
+        self.assertIn("Nothing is open", Path(next(x for x in self.writes(r) if x["collection"] == "config")["file_path"]).read_text())
+        r = self.run_q("close", "t", "G1", "--version", "2", "--outcome", "Done.", "--lede", "~/q/lede.html", ok=False)
+        self.assertIn("file's name", r.stdout + r.stderr)
+        self.assertNotEqual(self.run_q("close", "t", "G1", "--version", "2", "--outcome", "Done.", "--lede", "x", "--lede-holds",
+                                       ok=False).returncode, 0, "one or the other")
+        answered = {"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)},
+                    "people/u_owner": {"submittedAt": iso(5)}, "receipts/u_owner": {"readAt": iso(50)},
+                    "people/u_owner/answers/g1": {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(30)}}
+        r = self.run_q("take-in", "t", self.listing(answered), "--pins", "G1=2 receipts/u_owner=3", ok=False, holds=False)
+        self.assertIn("changes which questions are open (G1)", r.stderr)
+        self.assertEqual(self.writes(r), [])
+        done = {**answered, "items/g1": {**answered["items/g1"], "status": "done", "takenAt": iso(20)}}
+        r = self.run_q("take-in", "t", self.listing(done), "--pins", "receipts/u_owner=3", holds=False)
+        self.assertEqual([x["collection"] for x in self.writes(r)], ["receipts"], "a receipt alone changes nothing open")
+
+    def test_close_leaves_an_answered_question_to_take_in(self):
+        # roc-ui's queue, 30 and 31 October and 15 November: closing answered questions one at a time by hand left one
+        # open, its answer unread. take-in closes them all at once (the owner, O30).
+        self.init()
+        close = lambda ref, ok=True: self.run_q("close", "t", ref, "--version", "1", "--outcome", "Withdrawn.", ok=ok)
+        self.assertIn("No listing of this queue on this machine yet", close("G1").stdout)
+        records = {"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)},
+                   "items/g2": {**GOOD, "ref": "G2", "status": "open", "askedAt": iso(60)},
+                   "items/g3": {**GOOD, "ref": "G3", "status": "open", "askedAt": iso(60), "for": "owner"},
+                   "items/g4": {**GOOD, "ref": "G4", "status": "open", "askedAt": iso(60)},
+                   "people/u_des": {"submittedAt": iso(5)},
+                   "people/u_owner/answers/g1": {"choice": "", "choiceLabel": "", "note": "Neither: ask me tomorrow.", "at": iso(30)},
+                   "people/u_owner/answers/g4": {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(30)},
+                   "people/u_des/answers/g3": {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(30)}}
+        d = self.listing(records)
+        self.run_q("answers", "t", d)
+        r = close("G1", ok=False)
+        self.assertIn("G1 has an answer to take in", r.stderr, "a note alone is an answer, as 373's was")
+        self.assertIn("Waiting there to be taken in: G1, G4.", r.stderr)
+        self.assertIn(f"take-in t {d.resolve()}", r.stderr)
+        self.assertEqual(self.writes(r), [])
+        self.assertEqual(len(self.writes(close("G2"))), 1, "a question nobody answered closes: a withdrawal")
+        self.assertEqual(len(self.writes(close("G3"))), 1, "input from someone who doesn't decide it: take-in leaves it open too")
+        self.run_q("take-in", "t", d, "--pins", "G1=1 G3=1 G4=1 receipts/u_des=new")
+        self.assertEqual(len(self.writes(close("G1"))), 1, "taken in since that listing")
+        self.run_q("answers", "t", self.listing(records))
+        self.assertIn("Waiting there to be taken in: G1, G4.", close("G4", ok=False).stderr, "a new listing: nothing taken in from it yet")
+        self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G4"}), "--version", "1", "--reask", "--no-reply")
+        self.assertEqual(len(self.writes(close("G4"))), 1, "re-asked since the listing: that answer belongs to the earlier round")
+        self.assertIn("Waiting there to be taken in: G1.", close("G1", ok=False).stderr)
+        r = self.run_q("wait", "t", "G1", "--version", "1", ok=False)
+        self.assertIn("G1 has an answer to take in", r.stderr, "Scheduled, take-in skips it: its answer would never be read")
+
     def test_a_text_that_is_only_a_path(self):
         # The God Game queue, 14 November: `config --lede @FILE` stored the reference as given, and the status line showed
         # the path for a day. --lede and --eyebrow read @FILE now, and no text the page shows may be only a file's name.
@@ -484,6 +559,7 @@ class QueueScript(unittest.TestCase):
         self.assertIn("G1 reply: '~/q/reply.md'", self.reask("--reply", "~/q/reply.md", ok=False).stdout)
         self.assertIn("--due: '~/q/due.txt'", self.run_q("wait", "t", "G1", "--due", "~/q/due.txt", "--version", "2", ok=False).stdout)
         self.assertIn("G1.due", self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "due": "~/q/due.txt"}), ok=False).stdout)
+        self.run_q("answers", "t", self.listing({"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)}}))
         self.run_q("wait", "t", "G1", "--due", "after the playtest, 20 November", "--version", "2")
         d = self.listing({"config/page": {"lede": "@/home/x/lede.html", "eyebrow": "Test"},
                           "items/g1": {**GOOD, "ref": "G1", "status": "open", "context": "<p>/home/x/c.html</p>"},
