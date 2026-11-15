@@ -120,6 +120,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - `queue.py take-in` stops when `people` wasn't listed (no Submit would be seen) and asks for each receipt's pin when `receipts` wasn't, `=new` for one the listing didn't find. Before, it wrote the receipt unpinned, and a receipt that already existed made the store refuse the whole batch (2.20.2, the God Game session, 14 November).
 - `queue.py config --lede` and `--eyebrow` read `@FILE`, as `fyi` does, and `ask`, `fyi`, `config`, `close` and `take-in` refuse any text the page shows that is only a file's name or path; `verify --store` names one already on the page. `config --lede @FILE` had stored the reference as given, and the God Game status line showed a path for a day (2.21.0, the God Game session, 14 November).
 - The path check covers a question's `due` (`ask`, `wait --due`), which the page shows as "Scheduled for …" and a chip, and `verify --store` also checks the replies stored under someone's note (2.21.1, the God Game session, 14 November).
+- `take-in` asks for a receipt's pin as `receipts/<uid>=?`, and refuses a pin on another collection such as `people/<uid>`. A bare uid matched both `people/<uid>` and `receipts/<uid>` in the listing, and the people record's version was nearly sent for the receipt; a bare uid still reads as its receipt (2.21.2, the God Game session, 15 November).
 
 ## License
 

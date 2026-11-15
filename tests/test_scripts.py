@@ -436,7 +436,7 @@ class QueueScript(unittest.TestCase):
         r = self.run_q("take-in", "t", self.listing(answers), "--pins", "G1=1", ok=False)
         self.assertIn("No people/ records", r.stderr)
         d = self.listing({**answers, "people/u_des": {"submittedAt": iso(20)}})
-        self.assertIn('"G1=? u_des=?". No receipts/', self.run_q("take-in", "t", d, ok=False).stderr)
+        self.assertIn('"G1=? receipts/u_des=?". No receipts/', self.run_q("take-in", "t", d, ok=False).stderr)
         receipt = next(w for w in self.writes(self.run_q("take-in", "t", d, "--pins", "G1=1 u_des=141")) if w["collection"] == "receipts")
         self.assertEqual(receipt["if_version"], 141)
         d = self.listing({**answers, "people/u_des": {"submittedAt": iso(20)}, "receipts/u_other": {"readAt": iso(90)}})
@@ -626,7 +626,7 @@ class QueueScript(unittest.TestCase):
         self.assertIn("Still writing, saved since their last Submit, so not shown or taken in: Anything else, G2.", out)
         self.assertNotIn("half a thou", out); self.assertNotIn("in progr", out)
         r = self.run_q("take-in", "t", d, "--pins", "G1=1 G2=1 G3=1", "--free", "u_des=1", ok=False)
-        self.assertIn('add --pins "u_des=?". No receipts/', r.stderr + r.stdout,
+        self.assertIn('add --pins "receipts/u_des=?". No receipts/', r.stderr + r.stdout,
                       "receipts not listed: a receipt that exists would refuse the whole batch unpinned (God Game, 14 November)")
         result = self.run_q("take-in", "t", d, "--pins", "G1=1 G2=1 G3=1 u_des=new", "--free", "u_des=1")
         receipt = next(w for w in self.writes(result) if w["collection"] == "receipts")
@@ -658,9 +658,13 @@ class QueueScript(unittest.TestCase):
         put("people/u_des/answers/g4", {"choice": "", "choiceLabel": "", "note": "Neither: ask me tomorrow.", "at": iso(30)})
         put("people/u_des/answers/anything-else", {"note": "Report: stuck twice.", "at": iso(6)})
         r = self.run_q("take-in", "t", d, ok=False)
-        self.assertIn('--pins "G1=? G4=? G3=? u_des=?"', r.stdout + r.stderr, "it says which versions it needs")
+        self.assertIn('--pins "G1=? G4=? G3=? receipts/u_des=?"', r.stdout + r.stderr,
+                      "it says which versions it needs, naming the receipt: u_des alone also matches people/u_des (God Game, 15 November)")
         self.assertEqual(self.writes(r), [])
-        r = self.run_q("take-in", "t", d, "--pins", "g1=3, G4=1 G3=2 u_des=5", "--reply", "G3=Not yet: it waits on the owner.")
+        r = self.run_q("take-in", "t", d, "--pins", "g1=3, G4=1 G3=2 people/u_des=5", ok=False)
+        self.assertIn("Nothing written", r.stdout + r.stderr, "people/<uid> takes no pin here")
+        self.assertEqual(self.writes(r), [])
+        r = self.run_q("take-in", "t", d, "--pins", "g1=3, G4=1 G3=2 receipts/u_des=5", "--reply", "G3=Not yet: it waits on the owner.")
         w = {(x["collection"], x["doc_id"]): x for x in self.writes(r)}
         self.assertEqual((w[("items", "g1")]["if_version"], w[("items", "g4")]["if_version"], w[("receipts", "u_des")]["if_version"]), (3, 1, 5))
         self.assertEqual(sorted(k[1] for k in w if k[0] == "items"), ["g1", "g3", "g4"], "g1 and g4 close; g3 gets a read mark")

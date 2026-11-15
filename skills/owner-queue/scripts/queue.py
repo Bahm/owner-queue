@@ -1011,7 +1011,15 @@ def cmd_take_in(a):
     free_versions = dict(pair.partition("=")[::2] for pair in a.free or [])
     plans = {id_for(state, ref): text.strip() for ref, text in (pair.partition("=")[::2] for pair in a.outcome or [])}
     # The store takes a write to an existing record only pinned to its version; the listing prints the versions.
-    pins = {id_for(state, k) if not k.startswith("u_") else k: v for k, _, v in (p.partition("=") for p in " ".join(a.pins or []).replace(",", " ").split())}
+    # A receipt is named receipts/<uid>: a bare uid also matches people/<uid> in the listing, whose version is
+    # another (God Game, 15 November). A bare uid still reads as its receipt.
+    def pin_key(k):
+        coll, _, rest = k.rpartition("/")
+        if coll and not (coll == "receipts" and rest.startswith("u_")):
+            die(f"--pins {k}: take-in pins questions (by ref) and receipts (receipts/<uid>). Anything else is pinned with "
+                "--free <uid>=<its version>. Nothing written.")
+        return rest if rest.startswith("u_") else id_for(state, rest)
+    pins = {pin_key(k): v for k, _, v in (p.partition("=") for p in " ".join(a.pins or []).replace(",", " ").split())}
     t = now()
     who = lambda uid: "The owner" if uid == owner else "A collaborator"
     out = Out(state, "take-in")
@@ -1076,9 +1084,9 @@ def cmd_take_in(a):
         [u for u in unread if (u in receipts or not receipts_listed) and u not in pins]
     if need:
         die("Pin each write to the version the listing showed (a store write to an existing record needs it): "
-            f"add --pins \"{' '.join(f'{n}=?' for n in need)}\"" +
+            f"add --pins \"{' '.join(f'receipts/{n}=?' if n.startswith('u_') else f'{n}=?' for n in need)}\"" +
             ("" if receipts_listed or not unread else f". No receipts/ under {root}: list `receipts` with out_dir {root} for "
-             "their versions. If that listing finds none, pin each person =new."))
+             "their versions. If that listing finds none, pin each receipt =new (receipts/<uid>=new)."))
     refs = []
     for item_id in taken:
         data = {"status": "done", "takenAt": stamp(t), "order": int(t.timestamp()),
@@ -1413,7 +1421,7 @@ def main():
     p.add_argument("--allow-you", action="store_true", help="keep a deliberate \"you\" in a shared queue's entry"); p.set_defaults(fn=cmd_fyi)
     p = sub.add_parser("prune"); p.add_argument("slug"); p.add_argument("ids", nargs="*"); p.set_defaults(fn=cmd_prune)
     p = sub.add_parser("answers"); p.add_argument("slug"); p.add_argument("dir"); p.add_argument("--unsubmitted", action="append", metavar="UID", help="also show that collaborator's answers saved since their last Submit"); p.set_defaults(fn=cmd_answers)
-    p = sub.add_parser("take-in"); p.add_argument("slug"); p.add_argument("dir"); p.add_argument("--unsubmitted", action="append", metavar="UID", help="take in that collaborator's answers saved since their last Submit, when the owner asks"); p.add_argument("--free", action="append", metavar="UID=VERSION", help="clear that person's Anything else, pinned to the version the listing showed"); p.add_argument("--outcome", action="append", metavar="REF=TEXT", help="what you'll do about that question's answer, shown on it"); p.add_argument("--reply", action="append", metavar="REF=TEXT", help="an answer shown under a collaborator's note on a question they don't decide"); p.add_argument("--pins", action="append", metavar='"REF=VERSION UID=VERSION …"', help="each answered question's and receipt's version, as the listing showed it"); p.set_defaults(fn=cmd_take_in)
+    p = sub.add_parser("take-in"); p.add_argument("slug"); p.add_argument("dir"); p.add_argument("--unsubmitted", action="append", metavar="UID", help="take in that collaborator's answers saved since their last Submit, when the owner asks"); p.add_argument("--free", action="append", metavar="UID=VERSION", help="clear that person's Anything else, pinned to the version the listing showed"); p.add_argument("--outcome", action="append", metavar="REF=TEXT", help="what you'll do about that question's answer, shown on it"); p.add_argument("--reply", action="append", metavar="REF=TEXT", help="an answer shown under a collaborator's note on a question they don't decide"); p.add_argument("--pins", action="append", metavar='"REF=VERSION receipts/UID=VERSION …"', help="each answered question's and receipt's version, as the listing showed it"); p.set_defaults(fn=cmd_take_in)
     p = sub.add_parser("receipt"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int); p.set_defaults(fn=cmd_receipt)
     p = sub.add_parser("clear-free"); p.add_argument("slug"); p.add_argument("uid"); p.add_argument("--version", type=int, required=True); p.set_defaults(fn=cmd_clear_free)
     p = sub.add_parser("lint"); p.add_argument("files", nargs="+"); p.set_defaults(fn=cmd_lint)
