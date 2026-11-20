@@ -174,6 +174,18 @@ class PageTest(unittest.TestCase):
         self.assertEqual(more.locator("a").inner_text(), "G2", "question numbers in it link, as in the context")
         self.assertFalse(p.locator("#item-g2 details.more").is_visible(), "no fold without details")
 
+    def test_a_source_folds_under_more_detail(self):
+        # A source names the file or report with the evidence: something to check, not to decide by. It showed below
+        # every question, uncounted, until roc-ui's rewrites of 346 and 356 moved theirs by hand (20 November).
+        data = seed()
+        data["items/g1"]["source"] = "~/tmp/p6/verdict.out"
+        p = self.open(data)
+        more = p.locator("#item-g1 details.more")
+        self.assertTrue(more.is_visible(), "a source alone opens a fold")
+        self.assertFalse(p.locator("#item-g1 .source").is_visible(), "folded until the reader opens it")
+        more.locator("summary").click()
+        self.assertEqual(p.locator("#item-g1 .source").inner_text(), "Source: ~/tmp/p6/verdict.out")
+
     def test_you_always_means_whoever_is_viewing(self):
         # Each viewer reads "you" as themselves, so the page's own words never use it for anyone else: a collaborator saw
         # "Your call" next to "For the owner", and the owner's in-person steps under their own "Needs you, in person"

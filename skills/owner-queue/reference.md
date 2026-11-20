@@ -49,7 +49,7 @@ A record is capped at 256 KiB. Questions stay small, and pictures go in files be
 | `takenAt` | When `take-in` closed it. A closed question shows one time, its "Closed" row (`takenAt`, else `order`), in the viewer's zone, and everyone's answers, yours included, under what was asked, its context and its options (read-only) |
 | `needs`, `steps`, `prompt` | For `yours`: what you'll need; numbered steps `[{text, command?}]` with Copy buttons; a prompt to paste into the chat, with a Copy button |
 | `input` | Label of the note box (default "Note (optional)") |
-| `source` | "Source: …" line naming the file or report with the evidence |
+| `source` | "Source: …" line naming the file or report with the evidence, folded as the last line under "More detail" |
 | `history` | `[{who, choiceLabel, note, at}]`: earlier answers carried over (by migration); answers older than `askedAt` are added by the page |
 
 Plain-text fields render `backticks` as code and never as HTML. Everything a person types is shown as text.

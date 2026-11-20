@@ -128,6 +128,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - Chips start with a capital: "Blocking", "Low priority", "Scheduled", as the kind and "For …" chips always did (2.23.1, the owner, 20 November).
 - A question can fold what a careful reader might check into `details`, shown under "More detail". SKILL.md's writing rules now say to write what shows first, so that it alone is enough to decide, and then fold only what that cut; the additive rules (an example per point, a tag on every estimate) are gone. In blind tests on 22 real questions, "more concisely" left the point buried and a word cap lost essential facts; on nine of them, this kept every fact while showing half the words (2.24.0, the owner and the designer, 20 November).
 - `ask` prints how many words a question shows, and warns above 500, on file paths and tags like [estimate] where it shows, and on a re-ask a quarter longer than the round before; `fyi` warns above 100 words that show; `config --lede` warns above 80 words and refuses above 400. The median question shown had doubled from October to November, re-asks grew 29% a round, and God Game's status line had reached 1,606 words (2.24.0).
+- A question's `source` folds as the last line under "More detail", with the evidence it names; it had shown below every question, outside the words `ask` counts (2.24.1, the roc-ui session, 20 November).
 
 ## License
 

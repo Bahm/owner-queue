@@ -751,7 +751,8 @@ function itemView(id) {
   const saved = el("div", "saved"); saved.id = "saved-" + id;
   const readLine = el("div", "read-line");
   const others = el("div", "others"), history = el("details", "history"), source = el("p", "source"), refby = el("p", "refby");
-  root.append(head, folded, priority, ask, reask, context, refby, opts, pick, meta, more, needs, steps, prompt, boxLabel, note, saved, readLine, others, history, source);
+  more.append(source);   // a source names where the evidence is: something to check, so it folds with it
+  root.append(head, folded, priority, ask, reask, context, refby, opts, pick, meta, more, needs, steps, prompt, boxLabel, note, saved, readLine, others, history);
   v = { root, fold, folded, ref, title, chips, priority, ask, reask, context, refby, opts, pick, meta, more, moreBody, needs, steps, prompt, boxLabel, noteText, clear, note, saved, readLine, others, history, source, keys: {} };
   const toggle = () => setFolds({ [id]: !isFolded(id, items.get(id)) });
   fold.addEventListener("click", toggle);
@@ -855,7 +856,7 @@ function updateItem(id, item, rank, openCount) {
   }
   v.meta.hidden = !v.meta.childElementCount;
   if (changedKey(v, "details", item.details)) setHtml(v.moreBody, item.details || "");
-  v.more.hidden = !item.details;
+  v.more.hidden = !item.details && !item.source;
   const doer = forMe(item);
   if (changedKey(v, "needs", [item.needs, doer])) { v.needs.replaceChildren(); if (item.needs) { v.needs.append(el("span", "label", doer ? "What you'll need" : "What it needs")); v.needs.append(withCode(el("p"), item.needs)); } }
   v.needs.hidden = !item.needs || !open;
