@@ -1,5 +1,5 @@
 <title>__QUEUE_TITLE__</title>
-<!-- owner-queue page features: reasked blocking -->
+<!-- owner-queue page features: reasked blocking details -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -150,6 +150,10 @@ textarea.has-text { border-color: var(--accent); }
 .reask .answer-line { color: var(--ink); }
 details.history > summary { cursor: pointer; font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 details.history[open] > summary { margin-bottom: .2rem; }
+/* "More detail": the evidence, derivations and sources a reader opens only to check something, folded so the question
+   reads in a minute (the owner, 20 November: verbosity on every queue, without losing context). */
+details.more > summary { cursor: pointer; font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+details.more[open] > summary { margin-bottom: .4rem; }
 .stamp { font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .source { font-family: var(--font-mono); font-size: .76rem; color: var(--muted); overflow-wrap: anywhere; }
 a.qref { font-weight: 600; text-decoration-style: dotted; text-underline-offset: .15em; }
@@ -520,7 +524,7 @@ function linkRefs(root, selfId) {
 function plainText(html) { return String(html ?? "").replace(/<(code|pre|kbd|a|button)\b[\s\S]*?<\/\1\s*>/gi, " ").replace(/<[^>]*>/g, " "); }
 function prose(text) { return String(text ?? "").replace(/`[^`]*`/g, " "); }
 function itemText(it) {
-  const parts = [it.title, it.ask, plainText(it.context), it.pick, it.priorityReason, it.blocking, it.effort, it.cost, it.undo, it.unblocks, it.outcome, it.needs];
+  const parts = [it.title, it.ask, plainText(it.context), plainText(it.details), it.pick, it.priorityReason, it.blocking, it.effort, it.cost, it.undo, it.unblocks, it.outcome, it.needs];
   for (const s of arr(it.steps)) parts.push(s && s.text);
   for (const c of arr(it.choices)) parts.push(c.label, c.cost, ...arr(c.pros), ...arr(c.cons));
   return parts.filter(Boolean).map(prose).join("\n");
@@ -740,14 +744,15 @@ function itemView(id) {
   const priority = el("p", "priority"), ask = el("p", "ask"), reask = el("div", "reask"), context = el("div", "context");
   const opts = el("div", "opts"); opts.setAttribute("role", "radiogroup");
   const pick = el("p", "pick"), meta = el("dl", "meta"), needs = el("div", "context"), steps = el("ol", "steps"), prompt = el("div");
+  const more = el("details", "more"), moreBody = el("div", "context"); more.append(el("summary", "", "More detail"), moreBody);
   const boxLabel = el("label", "box-label"), noteText = el("span"), clear = el("button", "link", "Clear my answer");
   clear.type = "button"; boxLabel.append(noteText, clear);
   const note = el("textarea"); note.id = "note-" + id; note.rows = 2; boxLabel.htmlFor = note.id;
   const saved = el("div", "saved"); saved.id = "saved-" + id;
   const readLine = el("div", "read-line");
   const others = el("div", "others"), history = el("details", "history"), source = el("p", "source"), refby = el("p", "refby");
-  root.append(head, folded, priority, ask, reask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, note, saved, readLine, others, history, source);
-  v = { root, fold, folded, ref, title, chips, priority, ask, reask, context, refby, opts, pick, meta, needs, steps, prompt, boxLabel, noteText, clear, note, saved, readLine, others, history, source, keys: {} };
+  root.append(head, folded, priority, ask, reask, context, refby, opts, pick, meta, more, needs, steps, prompt, boxLabel, note, saved, readLine, others, history, source);
+  v = { root, fold, folded, ref, title, chips, priority, ask, reask, context, refby, opts, pick, meta, more, moreBody, needs, steps, prompt, boxLabel, noteText, clear, note, saved, readLine, others, history, source, keys: {} };
   const toggle = () => setFolds({ [id]: !isFolded(id, items.get(id)) });
   fold.addEventListener("click", toggle);
   title.addEventListener("click", (e) => { if (!(e.target instanceof Element && e.target.closest("a"))) toggle(); });
@@ -849,6 +854,8 @@ function updateItem(id, item, rank, openCount) {
     if (!value) continue; v.meta.append(el("dt", "", term), withCode(el("dd"), value));
   }
   v.meta.hidden = !v.meta.childElementCount;
+  if (changedKey(v, "details", item.details)) setHtml(v.moreBody, item.details || "");
+  v.more.hidden = !item.details;
   const doer = forMe(item);
   if (changedKey(v, "needs", [item.needs, doer])) { v.needs.replaceChildren(); if (item.needs) { v.needs.append(el("span", "label", doer ? "What you'll need" : "What it needs")); v.needs.append(withCode(el("p"), item.needs)); } }
   v.needs.hidden = !item.needs || !open;

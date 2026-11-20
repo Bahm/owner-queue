@@ -158,6 +158,22 @@ class PageTest(unittest.TestCase):
         self.assertEqual(p.locator(".chip.blocking").count(), 1, "only open questions wear it")
         self.assertNotIn("Stale", p.locator("body").inner_text())
 
+    def test_more_detail_folds_the_evidence(self):
+        # What a careful reader might check folds under "More detail", so the question reads in a minute (the owner,
+        # 20 November: verbosity on every queue, without losing context).
+        data = seed()
+        data["items/g1"]["details"] = "<p>Measured in the ninth stage; see G2 for the line.</p>"
+        p = self.open(data)
+        more = p.locator("#item-g1 details.more")
+        self.assertTrue(more.is_visible())
+        self.assertEqual(more.locator("summary").inner_text().lower(), "more detail")
+        self.assertIsNone(more.get_attribute("open"), "folded until the reader opens it")
+        self.assertFalse(p.locator("#item-g1 details.more .context p").is_visible())
+        more.locator("summary").click()
+        self.assertTrue(p.locator("#item-g1 details.more .context p").is_visible())
+        self.assertEqual(more.locator("a").inner_text(), "G2", "question numbers in it link, as in the context")
+        self.assertFalse(p.locator("#item-g2 details.more").is_visible(), "no fold without details")
+
     def test_you_always_means_whoever_is_viewing(self):
         # Each viewer reads "you" as themselves, so the page's own words never use it for anyone else: a collaborator saw
         # "Your call" next to "For the owner", and the owner's in-person steps under their own "Needs you, in person"

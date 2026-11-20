@@ -53,11 +53,24 @@ NOT_DELEGABLE = re.compile(r"\b(unsafe|wake|download|push|publish|deploy|delet|p
 CAPABILITIES = {"db": {"rules": RULES}, "user": {"scopes": ["profile"]}, "downloads": {}}
 SOUNDS = ("chime", "beeps", "divine", "none")
 CHECKLIST = """Lint can't check these. Check each yourself before publishing:
-  - Every claim and number checked against its source (code, measurement, report); estimates say so.
-  - Every term the reader hasn't used is defined or replaced; one real example per abstract point.
-  - Limits stated next to the claims they limit. The owner's earlier answers cited for no more than they said.
-  - For the designer or a collaborator: their terms, nothing technical; an approach goes to them before it's built.
-  - It matches what was actually asked for, and its context sits inside it, not in a "read first" block."""
+  - Someone who reads only what shows can decide: "In short" says what's decided, what you recommend and the fact it
+    rests on, and every risk, big cost or step that can't be undone sits in its option.
+  - Nothing shows that couldn't change the pick. `details` holds only what that cut and a careful reader might check
+    (how numbers were found, history, paths and sources), never what the pick rests on. Nothing is said twice.
+  - Each pro and con is what changes for the reader, in plain words, one sentence. Uncertainty is said once, where it
+    could change the pick.
+  - Every claim and number checked against its source; earlier answers cited for no more than they said.
+  - For the designer or a collaborator: their terms, nothing technical; an approach goes to them before it's built."""
+# What a question shows without a click, and how much of it a reader should have to read (the owner, 20 November:
+# verbosity on every queue). Nine long real questions, written whole and then folded only where that cut, showed 250 to
+# 690 words, six of them under 500, and kept every fact.
+SHOWN_FIELDS = ("title", "ask", "context", "pick", "priorityReason", "blocking", "effort", "cost", "undo", "unblocks", "needs")
+SHOWN_WARN = 500
+LEDE_WARN, LEDE_MAX = 80, 400   # the status line is one or two sentences; God Game's had grown to 1,606 words
+FYI_WARN = 100                  # "a quick FYI ... with anything technical collapsed by default" (the owner, 25 October)
+FOLDED = re.compile(r"<details\b.*?</details\s*>", re.S | re.I)
+PATHLIKE = re.compile(r"~/\S+|(?<![\w/])(?:[\w.-]+/)+[\w.-]+\.(?:md|py|json|out|log|txt|sh|roc|rs|js|html|csv)\b")
+TAGS = re.compile(r"\[(?:estimate|arithmetic|inference|inferred|measured|not measured|traced|untested)[^\]]{0,40}\]", re.I)
 
 
 # ---- small helpers -----------------------------------------------------------
@@ -135,6 +148,35 @@ def listed(value):
     return value if isinstance(value, list) else []
 
 
+def word_count(text):
+    return len(html.unescape(re.sub(r"<[^>]+>", " ", text)).split()) if isinstance(text, str) else 0
+
+
+def shown_texts(item):
+    """The texts a question shows without a click, with any <details> fold taken out."""
+    texts = [item.get(f) for f in SHOWN_FIELDS]
+    for c in records(item.get("choices")):
+        texts += [c.get("label"), c.get("cost"), *listed(c.get("pros")), *listed(c.get("cons"))]
+    texts += [s.get("text") for s in records(item.get("steps"))]
+    return [FOLDED.sub(" ", t) for t in texts if isinstance(t, str)]
+
+
+def lint_lede_length(lede, errors, warnings):
+    """The status line says what's open and what's running in one or two sentences. Standing content (an order of
+    work, a plan) goes in a panel, which nothing loses."""
+    n = word_count(FOLDED.sub(" ", lede)) if isinstance(lede, str) else 0
+    fix = ("Say what's open and what's running in one or two sentences; an order of work or a plan goes in a panel "
+           "(`queue.py config --panels`), or folds inside <details>.")
+    if n > LEDE_MAX:
+        errors.append(f"lede: {n} words. {fix}")
+    elif n > LEDE_WARN:
+        warnings.append(f"lede: {n} words. {fix}")
+
+
+def folded_words(item):
+    return word_count(item.get("details")) + sum(map(word_count, FOLDED.findall(item.get("context") or "") if isinstance(item.get("context"), str) else []))
+
+
 def records(value):
     """The objects in a list field, the way the page's arr() and its readers see them."""
     return [x for x in listed(value) if isinstance(x, dict)]
@@ -143,7 +185,7 @@ def records(value):
 # The fields the page reads (a test keeps these in step with the page), and the misnamings seen so far.
 ITEM_FIELDS = {"ref", "id", "title", "ask", "context", "status", "group", "for", "choices", "secondOpinion", "pick", "priority",
                "priorityReason", "lowPriority", "blocking", "askedAt", "due", "effort", "cost", "undo", "unblocks", "outcome", "read",
-               "reasked", "takenAt", "order", "needs", "steps", "prompt", "input", "source", "history"}
+               "reasked", "takenAt", "order", "needs", "steps", "prompt", "input", "source", "history", "details"}
 CHOICE_FIELDS = {"key", "label", "primary", "pros", "cons", "cost"}
 STEP_FIELDS = {"text", "command"}
 LIST_FIELDS = {"choices": '{"key": "a", "label": "…"}', "steps": '{"text": "…"}', "history": '{"who": "…", "note": "…", "at": "…"}'}
@@ -194,7 +236,7 @@ class Out:
 
 
 # ---- lint --------------------------------------------------------------------
-HTML_FIELDS = ("context", "html", "lede")
+HTML_FIELDS = ("context", "details", "html", "lede")
 BAD_HTML = [
     (re.compile(r"<\s*script", re.I), "a <script> tag"),
     (re.compile(r"\son[a-z]+\s*=", re.I), "an event-handler attribute (on...=)"),
@@ -397,8 +439,8 @@ def lint_path(where, text, errors, fix="Put the text itself there"):
 def item_texts(item, ref):
     """Every text the page shows from a question that a session writes. Not `steps[].command`, `prompt` or `source`: those
     hold paths on purpose. Not `history`: those are people's own notes."""
-    for field in ("title", "ask", "context", "pick", "priorityReason", "blocking", "effort", "cost", "undo", "unblocks", "outcome",
-                  "needs", "input", "due"):
+    for field in ("title", "ask", "context", "details", "pick", "priorityReason", "blocking", "effort", "cost", "undo", "unblocks",
+                  "outcome", "needs", "input", "due"):
         yield f"{ref}.{field}", item.get(field)
     for c in records(item.get("choices")):
         for field in ("label", "cost"):
@@ -630,6 +672,7 @@ def cmd_config(a):
     if a.lede:
         errors, warnings = [], []
         lint_html("lede", a.lede, errors, warnings)
+        lint_lede_length(a.lede, errors, warnings)
         lint_you(state, "lede", a.lede, errors, a.allow_you)
         if not report(errors, warnings, checklist=False):
             die("Not written.")
@@ -805,8 +848,10 @@ def cmd_ask(a):
         warnings.append(f"{item.get('ref') or doc_id}: this queue's published page predates the \"Blocking\" chip, so it won't "
                         "show yet. The session that owns the queue republishes it (`queue.py render`, Artifact publish, "
                         "`queue.py published`).")
+    shown = reading_load(state, a, new, doc_id, item, errors, warnings)
     if not report(errors, warnings):
         die("Not written: fix the errors above.")
+    state.setdefault("shown", {})[doc_id] = shown
     lede = lede_arg(state, a, (item.get("ref") or doc_id) if new or a.reask else "")
     if a.reask and not new and state.get("listing"):   # the listing shows it open with its answer: close's check skips it
         state["listing"]["handled"] = sorted(set(state["listing"].get("handled") or []) | {doc_id})
@@ -824,6 +869,8 @@ def cmd_ask(a):
     out = Out(state, "ask-" + doc_id)
     out.add("set" if new else "update", "items", doc_id, item, a.version)
     note += add_lede(state, out, lede)
+    folded = folded_words(item)
+    note += f" It shows {shown} words" + (f", with {folded} more under More detail." if folded else ".")
     out.emit(f"Item {item.get('ref') or doc_id} → items/{doc_id}." + note + (" Answers given before now show under Previous answers." if a.reask else "") +
              (" Whoever wrote a note it answers sees it with your reply at the top." if item.get("reasked") and a.reply else ""))
 
@@ -844,6 +891,38 @@ def cmd_close(a):
     out = Out(state, "close-" + doc_id)
     out.add("update", "items", doc_id, data, a.version)
     out.emit((unchecked + add_lede(state, out, lede)).strip())
+
+
+def reading_load(state, a, new, doc_id, item, errors, warnings):
+    """How much a question asks its reader to read, and the habits that grew it: the median question doubled from
+    October to November, and the owner and the designer both found them too long (the owner, 20 November). Returns the
+    words it shows without a click."""
+    ref = item.get("ref") or doc_id
+    if item.get("details") is not None and not page_has(state, "details"):
+        errors.append(f"{ref}: this queue's published page predates More detail, so `details` wouldn't show at all. "
+                      "Republish it first (`queue.py render`, Artifact publish, `queue.py published`).")
+    texts = shown_texts(item)
+    shown = sum(map(word_count, texts))
+    if shown > SHOWN_WARN:
+        warnings.append(f"{ref}: {shown} words show without a click; most questions need under {SHOWN_WARN}. Keep what could "
+                        "change the pick, with the fact it rests on; how numbers were found, history and sources go in "
+                        "`details`, folded under More detail.")
+    if item.get("group") != "yours":   # a step only they can take names its paths on purpose
+        plain = [html.unescape(re.sub(r"<[^>]+>", " ", t)) for t in texts]
+        paths = sorted({m for t in plain for m in PATHLIKE.findall(t)})
+        if paths:
+            warnings.append(f"{ref}: file paths where the question shows ({', '.join(paths[:3])}{', …' if len(paths) > 3 else ''}). "
+                            "They go in `details` or `source`, unless the reader must open them.")
+        tags = sum(len(TAGS.findall(t)) for t in plain)
+        if tags > 2:
+            warnings.append(f"{ref}: {tags} tags like [estimate] where the question shows. Say uncertainty once, where it "
+                            "could change the pick.")
+    before = (state.get("shown") or {}).get(doc_id)
+    if a.reask and not new and before and shown > max(before * 1.25, 150):
+        warnings.append(f"{ref}: asked again {round(100 * (shown - before) / before)}% longer than before ({before} → {shown} "
+                        "words shown). Rewrite it rather than add to it: --reply answers the note, \"In short\" says what "
+                        "changed, and what can no longer change the pick folds into `details`.")
+    return shown
 
 
 def left_to_take_in(state, a, doc_id, verb):
@@ -873,6 +952,7 @@ def lede_arg(state, a, changed):
         return None
     errors, warnings = [], []
     lint_html("lede", lede, errors, warnings)
+    lint_lede_length(lede, errors, warnings)
     lint_you(state, "lede", lede, errors, a.allow_you)
     for where, text in config_texts({**state["config"], "lede": lede}):
         lint_path(where, text, errors, "Put the HTML itself in the panels file" if where.startswith("panel") else READ_IT)
@@ -915,6 +995,9 @@ def cmd_fyi(a):
     entry = {"at": stamp(t), "html": text}
     errors, warnings = lint_feed(entry)
     lint_you(state, "feed", text, errors, a.allow_you)
+    if word_count(FOLDED.sub(" ", text)) > FYI_WARN:
+        warnings.append(f"fyi: {word_count(FOLDED.sub(' ', text))} words show. Say what was done in one to three sentences, "
+                        "and fold the technical part inside <details><summary>Details</summary>…</details>.")
     if not report(errors, warnings, checklist=False):
         die("Not written.")
     out = Out(state, "fyi")

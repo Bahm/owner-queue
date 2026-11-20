@@ -179,6 +179,56 @@ class QueueScript(unittest.TestCase):
         r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G3", "blocking": "The release, tomorrow."}))
         self.assertIn("predates the \"Blocking\" chip", r.stdout, "a page published before it can't show it yet")
 
+    def test_ask_counts_what_shows_and_warns_on_the_habits_that_grew_it(self):
+        # The owner, 20 November: verbosity on every queue, without losing context. The median question doubled from
+        # October to November; rewrites written whole first, then folded only where that cut, kept every fact.
+        self.init()
+        out = lambda r: r.stdout + r.stderr
+        r = self.run_q("ask", "t", self.item_file(GOOD))
+        self.assertRegex(r.stdout, r"It shows \d+ words\.")
+        self.assertNotIn("words show without a click", r.stdout)
+        long = "<p>" + "word " * 500 + "</p>"
+        self.assertIn("words show without a click", out(self.run_q("ask", "t", self.item_file({**GOOD, "context": long}))))
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "context": "<p>In short.</p>", "details": long}))
+        self.assertNotIn("words show without a click", out(r), "what's folded under More detail isn't counted")
+        self.assertRegex(r.stdout, r"with 500 more under More detail")
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "context": f"<p>In short.</p><details><summary>More</summary>{long}</details>"}))
+        self.assertNotIn("words show without a click", out(r), "nor is a fold inside the context")
+        self.assertIn("file paths where the question shows (~/tmp/p6/verdict.out)",
+                      out(self.run_q("ask", "t", self.item_file({**GOOD, "context": "<p>See <code>~/tmp/p6/verdict.out</code>.</p>"}))))
+        self.assertNotIn("file paths", out(self.run_q("ask", "t", self.item_file({**GOOD, "details": "<p>Sources: ~/tmp/p6/verdict.out</p>"}))))
+        tagged = {**GOOD, "context": "<p>1.7 ms [arithmetic], 2.9× [estimate], 3 MB [inference].</p>"}
+        self.assertIn("3 tags like [estimate]", out(self.run_q("ask", "t", self.item_file(tagged))))
+        # Asked again, it's rewritten rather than added to.
+        self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "context": "<p>" + "word " * 200 + "</p>"}), "--version", "2")
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "context": "<p>" + "word " * 210 + "</p>"}), "--version", "3", "--reask", "--no-reply")
+        self.assertNotIn("asked again", out(r), "a little longer is fine")
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "context": "<p>" + "word " * 300 + "</p>"}), "--version", "4", "--reask", "--no-reply")
+        self.assertIn("asked again 37% longer than before (242 → 332 words shown)", out(r))
+        # More detail needs a page that shows it: otherwise the text wouldn't show at all.
+        state = self.tmp / "owner-queue/t/state.json"
+        old = json.loads(state.read_text())
+        old["pageFeatures"] = {old["publishedTemplate"]: ["reasked", "blocking"]}
+        state.write_text(json.dumps(old))
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "details": "<p>Evidence.</p>"}), ok=False)
+        self.assertIn("predates More detail", out(r))
+        self.assertEqual(self.writes(r), [])
+
+    def test_status_line_and_fyi_stay_short(self):
+        # The status line is one or two sentences (God Game's had grown to 1,606 words); For information is "a quick
+        # FYI ... with anything technical collapsed by default" (the owner, 25 October).
+        self.init()
+        out = lambda r: r.stdout + r.stderr
+        self.assertNotIn("lede:", out(self.run_q("config", "t", "--lede", "<b>20 November:</b> G4 waits on the designer.")))
+        self.assertIn("lede: 100 words", out(self.run_q("config", "t", "--lede", "<p>" + "word " * 100 + "</p>")))
+        r = self.run_q("config", "t", "--lede", "<p>" + "word " * 500 + "</p>", ok=False)
+        self.assertIn("goes in a panel", out(r))
+        self.assertEqual(self.writes(r), [])
+        folded = "<p>Short.</p><details><summary>Details</summary>" + "word " * 500 + "</details>"
+        self.assertNotIn("lede:", out(self.run_q("config", "t", "--lede", folded)))
+        self.assertIn("fyi: 150 words show", out(self.run_q("fyi", "t", "<p>" + "word " * 150 + "</p>")))
+        self.assertNotIn("fyi:", out(self.run_q("fyi", "t", folded)))
+
     def listing(self, records):
         """What ArtifactData `list` with out_dir leaves: one JSON file per record, at its path."""
         folder = Path(tempfile.mkdtemp(dir=self.tmp))
