@@ -202,6 +202,10 @@ class QueueScript(unittest.TestCase):
         self.assertEqual(sent["details"], "<p>Sources: ~/tmp/p6/verdict.out</p>")
         self.assertNotIn("askedAt", sent, "a plain edit keeps when it was asked, so answers stay attached")
         self.assertIn("It removes `for`, `source`, which the newest listing shows stored", r.stdout)
+        # Scheduled by an edit rather than by wait, it drops its priority as wait does (roc-ui-research's S71-S73, S89).
+        waiting = {k: v for k, v in GOOD.items() if k not in ("priority", "priorityReason")}
+        sent = body(self.run_q("ask", "t", self.item_file({**waiting, "ref": "G1", "status": "waiting"}), "--version", "3"))
+        self.assertEqual((sent["priority"], sent["priorityReason"]), ({"__delete__": True}, {"__delete__": True}))
 
     def test_ask_counts_what_shows_and_warns_on_the_habits_that_grew_it(self):
         # The owner, 20 November: verbosity on every queue, without losing context. The median question doubled from

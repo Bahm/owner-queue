@@ -188,8 +188,8 @@ ITEM_FIELDS = {"ref", "id", "title", "ask", "context", "status", "group", "for",
                "reasked", "takenAt", "order", "needs", "steps", "prompt", "input", "source", "history", "details"}
 # What the session writes in a question's file, so what an edit replaces. The rest is the script's (status, times,
 # history, replies) or close's and wait's (outcome, undo, due).
-EDIT_FIELDS = ("ask", "context", "details", "group", "for", "choices", "secondOpinion", "pick", "lowPriority", "blocking",
-               "effort", "cost", "unblocks", "needs", "steps", "prompt", "input", "source")
+EDIT_FIELDS = ("ask", "context", "details", "group", "for", "choices", "secondOpinion", "pick", "priority", "priorityReason",
+               "lowPriority", "blocking", "effort", "cost", "unblocks", "needs", "steps", "prompt", "input", "source")
 CHOICE_FIELDS = {"key", "label", "primary", "pros", "cons", "cost"}
 STEP_FIELDS = {"text", "command"}
 LIST_FIELDS = {"choices": '{"key": "a", "label": "…"}', "steps": '{"text": "…"}', "history": '{"who": "…", "note": "…", "at": "…"}'}
