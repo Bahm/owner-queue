@@ -150,7 +150,7 @@ class PageTest(unittest.TestCase):
         p = self.open(data)
         self.assertEqual(p.locator("#section-urgent .item .ref").all_inner_texts(), ["G3", "G1", "G2"])
         self.assertIn("priority 1 of 5", self.text("#item-g3 .priority").lower())
-        self.assertIn("blocking", self.text("#item-g3 .chips"))
+        self.assertIn("Blocking", self.text("#item-g3 .chips"))
         self.assertIn("blocking", self.text("#item-g3 .meta").lower())
         self.assertIn("laptop step, likely within a day", self.text("#item-g3 .meta"))
         for ref in ("g1", "g6"):

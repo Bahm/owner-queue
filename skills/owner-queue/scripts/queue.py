@@ -285,7 +285,7 @@ def lint_item(item, state=None):
             errors.append(f"{ref}: an open question needs at least two `choices` to pick from, each with `pros` and `cons`. "
                           "A step only they can take is `group: \"yours\"`, with `steps` or a `prompt`.")
     if item.get("blocking") not in (None, {"__delete__": True}):
-        # The work that waits on the answer now or soon, and when: a "blocking" chip, sorted first (the owner, 20 November).
+        # The work that waits on the answer now or soon, and when: a "Blocking" chip, sorted first (the owner, 20 November).
         if not (isinstance(item["blocking"], str) and item["blocking"].strip()):
             errors.append(f"{ref}: `blocking` says what work waits on the answer, and when, such as \"The hills step, "
                           "likely within a day\". Leave it out when nothing near waits.")
@@ -802,7 +802,7 @@ def cmd_ask(a):
                         "closed question, \"open\" puts it back with its old outcome. To ask again, use --reask; to close or "
                         "schedule it, use close or wait; otherwise take status out of the file.")
     if isinstance(item.get("blocking"), str) and not page_has(state, "blocking"):
-        warnings.append(f"{item.get('ref') or doc_id}: this queue's published page predates the \"blocking\" chip, so it won't "
+        warnings.append(f"{item.get('ref') or doc_id}: this queue's published page predates the \"Blocking\" chip, so it won't "
                         "show yet. The session that owns the queue republishes it (`queue.py render`, Artifact publish, "
                         "`queue.py published`).")
     if not report(errors, warnings):

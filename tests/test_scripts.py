@@ -165,7 +165,7 @@ class QueueScript(unittest.TestCase):
         self.assertIn("G1.blocking", r.stdout + r.stderr, "a path alone is refused, as in every page text")
         r = self.run_q("ask", "t", self.item_file({**GOOD, "blocking": "The lower hills' laptop step, likely within a day."}))
         self.assertEqual(body(r)["blocking"], "The lower hills' laptop step, likely within a day.")
-        self.assertNotIn("predates the \"blocking\" chip", r.stdout, "init's page shows it")
+        self.assertNotIn("predates the \"Blocking\" chip", r.stdout, "init's page shows it")
         self.assertNotIn("blocking", body(self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G2", "blocking": None}))))
         r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "blocking": None}), "--version", "2")
         self.assertEqual(body(r)["blocking"], {"__delete__": True}, "null on an edit takes the tag off")
@@ -177,7 +177,7 @@ class QueueScript(unittest.TestCase):
         old["pageFeatures"] = {old["publishedTemplate"]: ["reasked"]}
         state.write_text(json.dumps(old))
         r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G3", "blocking": "The release, tomorrow."}))
-        self.assertIn("predates the \"blocking\" chip", r.stdout, "a page published before it can't show it yet")
+        self.assertIn("predates the \"Blocking\" chip", r.stdout, "a page published before it can't show it yet")
 
     def listing(self, records):
         """What ArtifactData `list` with out_dir leaves: one JSON file per record, at its path."""

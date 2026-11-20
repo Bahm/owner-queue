@@ -78,7 +78,8 @@ button.link { border: 0; background: none; padding: 0; color: var(--accent); tex
 /* A chip wraps only when it alone is wider than its row: one that didn't (2.17.1's status tag) widened a phone's page. */
 .chip { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .03em; padding: .08rem .45rem; border-radius: 999px; overflow-wrap: anywhere; background: var(--accent-soft); color: var(--accent); }
 .chip.due { background: var(--warn-soft); color: var(--warn); }
-/* Work waits on the answer now or soon: solid, so it reads on a folded card at a glance (the owner, 20 November). */
+/* Work waits on the answer now or soon: solid, so it reads on a folded card at a glance (the owner, 20 November).
+   Chips start with a capital, as the owner wrote "Blocking" and as the kind and "For …" chips always did. */
 .chip.blocking { background: var(--warn); color: var(--surface); font-weight: 700; }
 .chip.for { background: var(--accent-soft); color: var(--accent); }
 /* A question someone else decides wears yellow wherever the viewer's own wear green, and says whose it is in solid
@@ -785,13 +786,13 @@ function updateItem(id, item, rank, openCount) {
   if (isFold) { withCode(v.folded, foldSummary(id, item)); if (item.status === "done" && closedAt(item)) v.folded.append(el("span", "stamp", "  " + when(closedAt(item)))); }
   if (changedKey(v, "title", item.title)) { v.title.replaceChildren(); withCode(v.title, item.title || ""); }
   v.chips.replaceChildren();
-  if (blocks(item)) v.chips.append(el("span", "chip blocking", "blocking"));
+  if (blocks(item)) v.chips.append(el("span", "chip blocking", "Blocking"));
   if (open && k[item.group]) v.chips.append(el("span", "chip", k[item.group]));
   if (item.for) v.chips.append(el("span", "chip for", forLabel(item)));
-  if (item.lowPriority) v.chips.append(el("span", "chip low", "low priority"));
+  if (item.lowPriority) v.chips.append(el("span", "chip low", "Low priority"));
   if (item.due && open) v.chips.append(el("span", "chip due", item.due));
-  if (item.status === "waiting") v.chips.append(el("span", "chip low", "scheduled"));
-  if (strayStatus.has(id)) v.chips.append(el("span", "chip low", "stored as “" + strayStatus.get(id) + "”, not a status the page knows"));
+  if (item.status === "waiting") v.chips.append(el("span", "chip low", "Scheduled"));
+  if (strayStatus.has(id)) v.chips.append(el("span", "chip low", "Stored as “" + strayStatus.get(id) + "”, not a status the page knows"));
   v.chips.hidden = !v.chips.childElementCount;
 
   v.priority.replaceChildren();
