@@ -179,6 +179,30 @@ class QueueScript(unittest.TestCase):
         r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G3", "blocking": "The release, tomorrow."}))
         self.assertIn("predates the \"Blocking\" chip", r.stdout, "a page published before it can't show it yet")
 
+    def test_an_edit_replaces_the_whole_question(self):
+        # The store merges an update, so a field the file left out kept its old value: three of God Game's rewrites
+        # (O31, 20 November) nearly kept a `source` they had dropped.
+        self.init()
+        body = lambda r: json.loads(Path(self.writes(r)[0]["file_path"]).read_text())
+        sent = body(self.run_q("ask", "t", self.item_file({**GOOD, "source": "~/tmp/p6/verdict.out", "effort": "An hour."})))
+        self.assertEqual(sent["source"], "~/tmp/p6/verdict.out")
+        self.assertNotIn("details", sent, "a new question sends only what it has")
+        listing = self.tmp / "listing"
+        (listing / "items").mkdir(parents=True)
+        (listing / "items/g1.json").write_text(json.dumps({**GOOD, "ref": "G1", "source": "~/tmp/p6/verdict.out", "effort": "An hour.", "for": "collaborator"}))
+        state = self.tmp / "owner-queue/t/state.json"
+        old = json.loads(state.read_text())
+        old["listing"] = {"dir": str(listing), "handled": []}
+        state.write_text(json.dumps(old))
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "effort": "An hour.", "details": "<p>Sources: ~/tmp/p6/verdict.out</p>"}), "--version", "2")
+        sent = body(r)
+        self.assertEqual(sent["source"], {"__delete__": True}, "left out, so removed")
+        self.assertEqual(sent["for"], {"__delete__": True})
+        self.assertEqual(sent["effort"], "An hour.")
+        self.assertEqual(sent["details"], "<p>Sources: ~/tmp/p6/verdict.out</p>")
+        self.assertNotIn("askedAt", sent, "a plain edit keeps when it was asked, so answers stay attached")
+        self.assertIn("It removes `for`, `source`, which the newest listing shows stored", r.stdout)
+
     def test_ask_counts_what_shows_and_warns_on_the_habits_that_grew_it(self):
         # The owner, 20 November: verbosity on every queue, without losing context. The median question doubled from
         # October to November; rewrites written whole first, then folded only where that cut, kept every fact.

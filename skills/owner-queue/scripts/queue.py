@@ -186,6 +186,10 @@ def records(value):
 ITEM_FIELDS = {"ref", "id", "title", "ask", "context", "status", "group", "for", "choices", "secondOpinion", "pick", "priority",
                "priorityReason", "lowPriority", "blocking", "askedAt", "due", "effort", "cost", "undo", "unblocks", "outcome", "read",
                "reasked", "takenAt", "order", "needs", "steps", "prompt", "input", "source", "history", "details"}
+# What the session writes in a question's file, so what an edit replaces. The rest is the script's (status, times,
+# history, replies) or close's and wait's (outcome, undo, due).
+EDIT_FIELDS = ("ask", "context", "details", "group", "for", "choices", "secondOpinion", "pick", "lowPriority", "blocking",
+               "effort", "cost", "unblocks", "needs", "steps", "prompt", "input", "source")
 CHOICE_FIELDS = {"key", "label", "primary", "pros", "cons", "cost"}
 STEP_FIELDS = {"text", "command"}
 LIST_FIELDS = {"choices": '{"key": "a", "label": "…"}', "steps": '{"text": "…"}', "history": '{"who": "…", "note": "…", "at": "…"}'}
@@ -792,6 +796,22 @@ def reask_reply(state, a, doc_id, item, errors, warnings):
     return {**kept, **{uid: {"answerAt": targets[uid], "reply": text} for uid, text in replies.items()}}
 
 
+def edit_removes(state, doc_id, item):
+    """An edit sends the file as the whole question: the store merges an update, so a field the file left out kept its
+    old value, and three rewritten God Game questions nearly kept a `source` they had dropped (20 November). Marks every
+    question field the file leaves out for deletion, and returns those the newest listing shows stored."""
+    stored = {}
+    seen = Path((state.get("listing") or {}).get("dir") or "/nonexistent") / "items" / f"{doc_id}.json"
+    try:
+        stored = json.loads(seen.read_text())
+    except (OSError, ValueError):
+        pass
+    removed = [f for f in EDIT_FIELDS if f not in item and stored.get(f) not in (None, "", [])]
+    for f in EDIT_FIELDS:
+        item.setdefault(f, {"__delete__": True})
+    return removed
+
+
 def cmd_ask(a):
     state = load_state(a.slug)
     path = Path(a.file)
@@ -866,6 +886,11 @@ def cmd_ask(a):
             note = f" Numbered {numbered}, written into {path.name}: ask on it again reuses the number."
         except OSError:
             note = f" Numbered {numbered}; add \"ref\": \"{numbered}\" to {path.name} before running ask on it again."
+    if not new:
+        removed = edit_removes(state, doc_id, item)
+        if removed:
+            note += (f" It removes {', '.join(f'`{f}`' for f in removed)}, which the newest listing shows stored: the file is "
+                     "the whole question, so add back any that should stay.")
     out = Out(state, "ask-" + doc_id)
     out.add("set" if new else "update", "items", doc_id, item, a.version)
     note += add_lede(state, out, lede)
