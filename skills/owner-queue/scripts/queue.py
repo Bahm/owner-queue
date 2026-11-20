@@ -37,6 +37,8 @@ TEMPLATE = HERE.parent / "assets" / "owner-queue.html"
 TOKEN = "__QUEUE_TITLE__"
 FREE_ID = "anything-else"
 CLOSED_FIELDS = ("takenAt", "order", "outcome", "undo")
+# What only an open question says: closing or scheduling one deletes them, so a re-ask states them afresh.
+OPEN_FIELDS = ("priority", "priorityReason", "blocking")
 FEED_HOURS = 48
 REPLY_MAX = 300   # a reply to the note that led to a re-ask: one or two plain sentences (the owner, roc-ui's question 326)
 FEATURES = re.compile(r"<!-- owner-queue page features: ([a-z ,-]*) -->")   # what a page can show, so the script knows
@@ -140,7 +142,7 @@ def records(value):
 
 # The fields the page reads (a test keeps these in step with the page), and the misnamings seen so far.
 ITEM_FIELDS = {"ref", "id", "title", "ask", "context", "status", "group", "for", "choices", "secondOpinion", "pick", "priority",
-               "priorityReason", "lowPriority", "askedAt", "due", "effort", "cost", "undo", "unblocks", "outcome", "read",
+               "priorityReason", "lowPriority", "blocking", "askedAt", "due", "effort", "cost", "undo", "unblocks", "outcome", "read",
                "reasked", "takenAt", "order", "needs", "steps", "prompt", "input", "source", "history"}
 CHOICE_FIELDS = {"key", "label", "primary", "pros", "cons", "cost"}
 STEP_FIELDS = {"text", "command"}
@@ -282,6 +284,13 @@ def lint_item(item, state=None):
             # Every open point is a decision with options (SKILL.md); one went out with none (the owner, 19 October).
             errors.append(f"{ref}: an open question needs at least two `choices` to pick from, each with `pros` and `cons`. "
                           "A step only they can take is `group: \"yours\"`, with `steps` or a `prompt`.")
+    if item.get("blocking") not in (None, {"__delete__": True}):
+        # The work that waits on the answer now or soon, and when: a "blocking" chip, sorted first (the owner, 20 November).
+        if not (isinstance(item["blocking"], str) and item["blocking"].strip()):
+            errors.append(f"{ref}: `blocking` says what work waits on the answer, and when, such as \"The hills step, "
+                          "likely within a day\". Leave it out when nothing near waits.")
+        elif item.get("lowPriority"):
+            errors.append(f"{ref}: both `blocking` and `lowPriority`: one holds work now or soon, the other can wait. Keep one.")
     keys = [c.get("key") for c in choices]
     if len(keys) != len(set(keys)) or any(not k for k in keys):
         errors.append(f"{ref}: every choice needs a unique `key`.")
@@ -342,7 +351,7 @@ def lint_item(item, state=None):
             lint_html(f"{ref}.{field}", item[field], errors, warnings)
     for where, text in item_texts(item, ref):
         lint_path(where, text, errors)
-    plain = [item.get(f) for f in ("title", "ask", "pick", "priorityReason", "outcome", "cost", "effort", "undo", "unblocks", "needs")]
+    plain = [item.get(f) for f in ("title", "ask", "pick", "priorityReason", "blocking", "outcome", "cost", "effort", "undo", "unblocks", "needs")]
     plain += [s.get("text") for s in steps]
     plain += [text for choice in choices for text in (choice.get("label"), choice.get("cost"), *listed(choice.get("pros")), *listed(choice.get("cons")))]
     lint_times(ref, [str(x) for x in plain if x], warnings)   # plain text on the page, never HTML: no tags to strip
@@ -388,8 +397,8 @@ def lint_path(where, text, errors, fix="Put the text itself there"):
 def item_texts(item, ref):
     """Every text the page shows from a question that a session writes. Not `steps[].command`, `prompt` or `source`: those
     hold paths on purpose. Not `history`: those are people's own notes."""
-    for field in ("title", "ask", "context", "pick", "priorityReason", "effort", "cost", "undo", "unblocks", "outcome", "needs",
-                  "input", "due"):
+    for field in ("title", "ask", "context", "pick", "priorityReason", "blocking", "effort", "cost", "undo", "unblocks", "outcome",
+                  "needs", "input", "due"):
         yield f"{ref}.{field}", item.get(field)
     for c in records(item.get("choices")):
         for field in ("label", "cost"):
@@ -776,6 +785,11 @@ def cmd_ask(a):
         if item["status"] != "done":
             for field in CLOSED_FIELDS:
                 item.setdefault(field, {"__delete__": True})
+    if "blocking" in item and item["blocking"] is None:   # `"blocking": null` takes the tag off once nothing near waits
+        if new:
+            del item["blocking"]
+        else:
+            item["blocking"] = {"__delete__": True}
     errors, warnings = lint_item(item, state)
     if a.reask and not new:
         marks = reask_reply(state, a, doc_id, item, errors, warnings)
@@ -787,6 +801,10 @@ def cmd_ask(a):
         warnings.append(f"{item.get('ref') or doc_id}: this edit (no --reask) sends status \"{item['status']}\" as it is: on a "
                         "closed question, \"open\" puts it back with its old outcome. To ask again, use --reask; to close or "
                         "schedule it, use close or wait; otherwise take status out of the file.")
+    if isinstance(item.get("blocking"), str) and not page_has(state, "blocking"):
+        warnings.append(f"{item.get('ref') or doc_id}: this queue's published page predates the \"blocking\" chip, so it won't "
+                        "show yet. The session that owns the queue republishes it (`queue.py render`, Artifact publish, "
+                        "`queue.py published`).")
     if not report(errors, warnings):
         die("Not written: fix the errors above.")
     lede = lede_arg(state, a, (item.get("ref") or doc_id) if new or a.reask else "")
@@ -812,8 +830,7 @@ def cmd_ask(a):
 
 def cmd_close(a):
     state = load_state(a.slug)
-    data = {"status": "done", "outcome": a.outcome, "order": int(now().timestamp()),
-            "priority": {"__delete__": True}, "priorityReason": {"__delete__": True}}
+    data = {"status": "done", "outcome": a.outcome, "order": int(now().timestamp()), **{f: {"__delete__": True} for f in OPEN_FIELDS}}
     if a.undo:
         data["undo"] = a.undo
     errors = []
@@ -876,7 +893,7 @@ def add_lede(state, out, lede):
 
 def cmd_wait(a):
     state = load_state(a.slug)
-    data = {"status": "waiting", "priority": {"__delete__": True}, "priorityReason": {"__delete__": True}}
+    data = {"status": "waiting", **{f: {"__delete__": True} for f in OPEN_FIELDS}}
     if a.due:
         data["due"] = a.due
     errors = []
@@ -1181,8 +1198,7 @@ def cmd_take_in(a):
              "their versions. If that listing finds none, pin each receipt =new (receipts/<uid>=new)."))
     refs = []
     for item_id in taken:
-        data = {"status": "done", "takenAt": stamp(t), "order": int(t.timestamp()),
-                "priority": {"__delete__": True}, "priorityReason": {"__delete__": True}}
+        data = {"status": "done", "takenAt": stamp(t), "order": int(t.timestamp()), **{f: {"__delete__": True} for f in OPEN_FIELDS}}
         if plans.get(item_id):
             data["outcome"] = plans[item_id]
         out.add("update", "items", item_id, data, pins[item_id])

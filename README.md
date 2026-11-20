@@ -124,6 +124,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - SKILL.md says `close` is for a question `take-in` won't close; answered questions are closed by `take-in`, all in one batch. Hand closes left an answered question open three times on roc-ui's queue (2.21.3, the roc-ui session, 15 November).
 - A change to which questions are open comes with the status line, on every queue: a new question, a re-ask, `close`, `wait` and a `take-in` that closes one need `--lede` (written in the same batch) or `--lede-holds` (2.22.0, the owner, O29; the God Game session's two stale lines, 13 and 15 November).
 - `close` and `wait` refuse a question the newest listing on this machine shows with an answer to take in, naming every one waiting there; take-in and close now share one function for what take-in would close (2.22.0, the owner, O30; roc-ui's three hand closes, 30 and 31 October and 15 November).
+- A question can say it's `blocking`: what work waits on its answer now or soon, and when. The page shows a "blocking" chip and row while it's open and sorts it first, so it leads the three most urgent; `close`, `wait` and `take-in` remove it, and `ask` warns while a queue's published page predates the chip (2.23.0, the owner, 20 November, in the God Game session).
 
 ## License
 

@@ -152,6 +152,33 @@ class QueueScript(unittest.TestCase):
                 left = (set(closed) - {"status", "priority", "priorityReason"}) & set(reopened)
                 self.assertEqual(sorted(left), [], "written when it closed, and kept by the re-ask")
 
+    def test_blocking_says_what_waits_and_ends_when_closed(self):
+        # The owner, 20 November: "We may want to add a "Blocking" tag", after asking whether open items hold work now or soon.
+        self.init()
+        body = lambda r: json.loads(Path(self.writes(r)[0]["file_path"]).read_text())
+        for value in (True, "", "  "):
+            r = self.run_q("ask", "t", self.item_file({**GOOD, "blocking": value}), ok=False)
+            self.assertIn("`blocking` says what work waits", r.stdout + r.stderr, value)
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "blocking": "The hills step.", "lowPriority": True}), ok=False)
+        self.assertIn("both `blocking` and `lowPriority`", r.stdout + r.stderr)
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "blocking": "~/q/blocking.md"}), ok=False)
+        self.assertIn("G1.blocking", r.stdout + r.stderr, "a path alone is refused, as in every page text")
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "blocking": "The lower hills' laptop step, likely within a day."}))
+        self.assertEqual(body(r)["blocking"], "The lower hills' laptop step, likely within a day.")
+        self.assertNotIn("predates the \"blocking\" chip", r.stdout, "init's page shows it")
+        self.assertNotIn("blocking", body(self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G2", "blocking": None}))))
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1", "blocking": None}), "--version", "2")
+        self.assertEqual(body(r)["blocking"], {"__delete__": True}, "null on an edit takes the tag off")
+        for args in (("close", "t", "G1", "--outcome", "Done.", "--version", "3"), ("wait", "t", "G1", "--version", "3")):
+            with self.subTest(args[0]):
+                self.assertEqual(body(self.run_q(*args))["blocking"], {"__delete__": True}, "only an open question holds work")
+        state = self.tmp / "owner-queue/t/state.json"
+        old = json.loads(state.read_text())
+        old["pageFeatures"] = {old["publishedTemplate"]: ["reasked"]}
+        state.write_text(json.dumps(old))
+        r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G3", "blocking": "The release, tomorrow."}))
+        self.assertIn("predates the \"blocking\" chip", r.stdout, "a page published before it can't show it yet")
+
     def listing(self, records):
         """What ArtifactData `list` with out_dir leaves: one JSON file per record, at its path."""
         folder = Path(tempfile.mkdtemp(dir=self.tmp))

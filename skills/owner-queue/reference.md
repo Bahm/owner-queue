@@ -39,6 +39,7 @@ A record is capped at 256 KiB. Questions stay small, and pictures go in files be
 | `pick` | "My pick" line: the Recommended choice and why |
 | `priority`, `priorityReason` | "Priority n of m" and what waiting costs. Open questions only |
 | `lowPriority` | A "low priority" chip; never among the three most urgent |
+| `blocking` | What work waits on the answer now or soon, and when. While open: a solid "blocking" chip and a "Blocking" row, sorted ahead of the rest, so first among the three most urgent. `ask` refuses it empty, not text, or with `lowPriority`; `"blocking": null` on an edit takes it off; `close`, `wait` and `take-in` delete it |
 | `askedAt` | Not shown. Answers older than it are an earlier round: shown under Previous answers, not as current |
 | `due` | Chip, e.g. "Oct 20" |
 | `effort`, `cost`, `undo`, `unblocks`, `outcome` | Labelled rows. `cost` is the cost to build: work and tokens. `outcome` is what was done about the answers |

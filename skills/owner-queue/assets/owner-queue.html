@@ -1,5 +1,5 @@
 <title>__QUEUE_TITLE__</title>
-<!-- owner-queue page features: reasked -->
+<!-- owner-queue page features: reasked blocking -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -78,6 +78,8 @@ button.link { border: 0; background: none; padding: 0; color: var(--accent); tex
 /* A chip wraps only when it alone is wider than its row: one that didn't (2.17.1's status tag) widened a phone's page. */
 .chip { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .03em; padding: .08rem .45rem; border-radius: 999px; overflow-wrap: anywhere; background: var(--accent-soft); color: var(--accent); }
 .chip.due { background: var(--warn-soft); color: var(--warn); }
+/* Work waits on the answer now or soon: solid, so it reads on a folded card at a glance (the owner, 20 November). */
+.chip.blocking { background: var(--warn); color: var(--surface); font-weight: 700; }
 .chip.for { background: var(--accent-soft); color: var(--accent); }
 /* A question someone else decides wears yellow wherever the viewer's own wear green, and says whose it is in solid
    yellow: the designer answered God Game's G116, for the owner, three times (the owner, 23 October). */
@@ -517,7 +519,7 @@ function linkRefs(root, selfId) {
 function plainText(html) { return String(html ?? "").replace(/<(code|pre|kbd|a|button)\b[\s\S]*?<\/\1\s*>/gi, " ").replace(/<[^>]*>/g, " "); }
 function prose(text) { return String(text ?? "").replace(/`[^`]*`/g, " "); }
 function itemText(it) {
-  const parts = [it.title, it.ask, plainText(it.context), it.pick, it.priorityReason, it.effort, it.cost, it.undo, it.unblocks, it.outcome, it.needs];
+  const parts = [it.title, it.ask, plainText(it.context), it.pick, it.priorityReason, it.blocking, it.effort, it.cost, it.undo, it.unblocks, it.outcome, it.needs];
   for (const s of arr(it.steps)) parts.push(s && s.text);
   for (const c of arr(it.choices)) parts.push(c.label, c.cost, ...arr(c.pros), ...arr(c.cons));
   return parts.filter(Boolean).map(prose).join("\n");
@@ -645,7 +647,9 @@ function knownStatus(id, item) {
 }
 function sectionOf(item) { return item.status === "done" ? "done" : item.status === "waiting" ? "waiting" : "open"; }
 function isDecision(item) { return arr(item.choices).length >= 2 && item.group !== "yours"; }
-function sorted() { return [...items.entries()].sort(([, a], [, b]) => (!!a.lowPriority - !!b.lowPriority) || (a.priority ?? Infinity) - (b.priority ?? Infinity) || (a.order ?? 999) - (b.order ?? 999) || String(a.ref || "").localeCompare(String(b.ref || ""), undefined, { numeric: true })); }
+// Blocking questions first, low-priority ones last, each part by its number.
+function blocks(item) { return typeof item.blocking === "string" && item.blocking.trim() !== "" && sectionOf(item) === "open"; }
+function sorted() { return [...items.entries()].sort(([, a], [, b]) => (blocks(b) - blocks(a)) || (!!a.lowPriority - !!b.lowPriority) || (a.priority ?? Infinity) - (b.priority ?? Infinity) || (a.order ?? 999) - (b.order ?? 999) || String(a.ref || "").localeCompare(String(b.ref || ""), undefined, { numeric: true })); }
 
 function subscribeAnswers(uid) {
   if (!db || !uid || answerSubs.has(uid)) return;
@@ -781,6 +785,7 @@ function updateItem(id, item, rank, openCount) {
   if (isFold) { withCode(v.folded, foldSummary(id, item)); if (item.status === "done" && closedAt(item)) v.folded.append(el("span", "stamp", "  " + when(closedAt(item)))); }
   if (changedKey(v, "title", item.title)) { v.title.replaceChildren(); withCode(v.title, item.title || ""); }
   v.chips.replaceChildren();
+  if (blocks(item)) v.chips.append(el("span", "chip blocking", "blocking"));
   if (open && k[item.group]) v.chips.append(el("span", "chip", k[item.group]));
   if (item.for) v.chips.append(el("span", "chip for", forLabel(item)));
   if (item.lowPriority) v.chips.append(el("span", "chip low", "low priority"));
@@ -839,7 +844,7 @@ function updateItem(id, item, rank, openCount) {
   v.pick.hidden = !item.pick || !open;
 
   v.meta.replaceChildren();
-  for (const [term, value] of [["Effort", item.effort], ["Cost to build", item.cost], ["Undo", item.undo], ["Unblocks", item.unblocks], ["Closed", item.status === "done" ? when(closedAt(item)) : ""], ["Outcome", item.outcome]]) {
+  for (const [term, value] of [["Blocking", blocks(item) ? item.blocking : ""], ["Effort", item.effort], ["Cost to build", item.cost], ["Undo", item.undo], ["Unblocks", item.unblocks], ["Closed", item.status === "done" ? when(closedAt(item)) : ""], ["Outcome", item.outcome]]) {
     if (!value) continue; v.meta.append(el("dt", "", term), withCode(el("dd"), value));
   }
   v.meta.hidden = !v.meta.childElementCount;

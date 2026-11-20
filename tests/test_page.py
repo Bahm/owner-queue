@@ -141,6 +141,23 @@ class PageTest(unittest.TestCase):
         self.assertIn("priority 2 of 5", self.text("#item-g3 .priority").lower())
         self.assertIn("priority 5 of 5", self.text("#item-g2 .priority").lower(), "the tagged question ranks last")
 
+    def test_blocking_ranks_first_with_its_chip(self):
+        # The owner, 20 November: "We may want to add a "Blocking" tag", to see which open items hold work now or soon.
+        data = seed()
+        data["items/g3"]["blocking"] = "The lower hills' laptop step, likely within a day."
+        data["items/g6"]["blocking"] = "Stale: a Scheduled question holds nothing now."
+        data["items/g7"]["blocking"] = "Stale: a closed one neither."
+        p = self.open(data)
+        self.assertEqual(p.locator("#section-urgent .item .ref").all_inner_texts(), ["G3", "G1", "G2"])
+        self.assertIn("priority 1 of 5", self.text("#item-g3 .priority").lower())
+        self.assertIn("blocking", self.text("#item-g3 .chips"))
+        self.assertIn("blocking", self.text("#item-g3 .meta").lower())
+        self.assertIn("laptop step, likely within a day", self.text("#item-g3 .meta"))
+        for ref in ("g1", "g6"):
+            self.assertNotIn("blocking", p.locator(f"#item-{ref} .chips").inner_text().lower(), ref)
+        self.assertEqual(p.locator(".chip.blocking").count(), 1, "only open questions wear it")
+        self.assertNotIn("Stale", p.locator("body").inner_text())
+
     def test_you_always_means_whoever_is_viewing(self):
         # Each viewer reads "you" as themselves, so the page's own words never use it for anyone else: a collaborator saw
         # "Your call" next to "For the owner", and the owner's in-person steps under their own "Needs you, in person"
