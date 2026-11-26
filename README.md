@@ -46,7 +46,7 @@ If another command already uses the name, run it as `/owner-queue:owner-queue`.
 
 ## Submit and waking a session
 
-Your answers count as soon as they're saved. A collaborator's count once they press Submit: until then Claude treats them as still being written and leaves them.
+Answers count once their writer presses Submit, yours included: until then Claude treats them as still being written and leaves them, unless you ask it to take them in anyway.
 
 By default, Submit wakes nothing: you tell a session. Two flags, set per queue, change that:
 

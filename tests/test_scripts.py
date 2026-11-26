@@ -27,6 +27,12 @@ def iso(minutes_ago=0.0):
     return t.strftime("%Y-%m-%dT%H:%M:%S.") + f"{t.microsecond // 1000:03d}Z"
 
 
+def owner_done():
+    """The owner pressed Submit after answering, and that submit was read: their answers count (the owner, 20 November:
+    "as a rule, you should wait for Submit"), with no receipt left to write."""
+    return {"people/u_owner": {"submittedAt": iso(5)}, "receipts/u_owner": {"readAt": iso(4)}}
+
+
 GOOD = {"title": "Height level", "ask": "What I'm asking: how many metres is one level?", "group": "domain",
         "priority": 1, "priorityReason": "Rocks come next, and they'd need tuning again.", "pick": "16 m.", "cost": "an hour",
         "choices": [{"key": "16", "label": "16 m", "primary": True, "pros": ["Mountains read."], "cons": ["Steeper."]},
@@ -324,7 +330,7 @@ class QueueScript(unittest.TestCase):
         self.init()
         self.run_q("ask", "t", self.item_file(GOOD))
         at = iso(30)
-        d = self.listing({"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)},
+        d = self.listing({"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)}, **owner_done(),
                           "people/u_owner/answers/g1": {"choice": "", "choiceLabel": "", "note": "Which build was that?", "at": at}})
         r = self.reask(ok=False)
         self.assertIn("a re-ask needs --answers DIR", r.stdout)
@@ -359,12 +365,14 @@ class QueueScript(unittest.TestCase):
             records.update({f"people/{uid}": body for uid, body in (people or {}).items()})
             return self.listing(records)
         submitted = {"u_des": {"submittedAt": iso(5)}}
+        mine_submitted = {"u_owner": {"submittedAt": iso(5)}}
+        both = {**submitted, **mine_submitted}
         d = listing({"for": "owner"}, {"u_des": iso(30)}, submitted)
         self.assertNotIn("reasked", json.loads(Path(self.writes(self.reask("--answers", d))[0]["file_path"]).read_text()),
                          "a collaborator's input on the owner's question needs no reply")
         body = json.loads(Path(self.writes(self.reask("--answers", d, "--reply", "Noted; the owner decides it."))[0]["file_path"]).read_text())
         self.assertEqual(list(body["reasked"]), ["u_des"], "but may have one, when it led to the re-ask")
-        d = listing({}, {"u_owner": iso(90)})
+        d = listing({}, {"u_owner": iso(90)}, mine_submitted)
         self.reask("--answers", d)   # a note from an earlier round: answered then
         self.assertIn("nothing for it to answer", self.reask("--answers", d, "--reply", "x", ok=False).stdout)
         self.reask("--answers", listing({"for": "collaborator"}, {"u_des": iso(3)}, submitted))   # still being written (O26)
@@ -372,7 +380,7 @@ class QueueScript(unittest.TestCase):
         self.assertIn("a note from a collaborator (u_des), whom it's for", r.stdout)
         earlier, changed, mine = iso(120), iso(100), iso(30)
         d = listing({"reasked": {"u_des": {"answerAt": earlier, "reply": "Earlier."}, "u_eve": {"answerAt": iso(200), "reply": "Stale."}}},
-                    {"u_des": earlier, "u_eve": changed, "u_owner": mine})
+                    {"u_des": earlier, "u_eve": changed, "u_owner": mine}, both)
         body = json.loads(Path(self.writes(self.reask("--answers", d, "--reply", "New."))[0]["file_path"]).read_text())
         self.assertEqual(body["reasked"], {"u_des": {"answerAt": earlier, "reply": "Earlier."}, "u_owner": {"answerAt": mine, "reply": "New."}},
                          "an earlier reply stays while its note does; one whose note changed since goes")
@@ -389,7 +397,7 @@ class QueueScript(unittest.TestCase):
         r = self.reask("--answers", self.listing({**item, "people/u_owner": {}, "people/u_des/answers/g1": note("Hm?")}), ok=False)
         self.assertIn("people/u_owner/answers", r.stderr, "a person listed without their answers stops it")
         both = self.listing({**item, "people/u_owner/answers/g1": note("Which build?"), "people/u_des/answers/g1": note("Too flat?"),
-                             "people/u_des": {"submittedAt": iso(5)}, "people/u_eve/answers/g1": ["not", "an", "answer"]})
+                             "people/u_des": {"submittedAt": iso(5)}, "people/u_eve/answers/g1": ["not", "an", "answer"], **owner_done()})
         r = self.reask("--answers", both, "--no-reply")
         self.assertIn("--no-reply, so the note from the owner, a collaborator (u_des), whom it's for, gets no answer", r.stdout)
         r = self.reask("--answers", both, "--reply", "The context now names the build and the slope.")
@@ -423,7 +431,7 @@ class QueueScript(unittest.TestCase):
         self.run_q("ask", "t", self.item_file(GOOD))
         state = self.tmp / "owner-queue" / "t" / "state.json"
         s = json.loads(state.read_text()); s["publishedTemplate"] = "000000000000"; state.write_text(json.dumps(s))   # an older page
-        d = self.listing({"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)},
+        d = self.listing({"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)}, **owner_done(),
                           "people/u_owner/answers/g1": {"choice": "", "choiceLabel": "", "note": "Which build?", "at": iso(30)}})
         for extra in ((), ("--answers", d), ("--answers", d, "--reply", "The context now names it. " * 12)):
             with self.subTest(extra[-1:] if extra else "no answers"):
@@ -647,7 +655,7 @@ class QueueScript(unittest.TestCase):
                    "items/g2": {**GOOD, "ref": "G2", "status": "open", "askedAt": iso(60)},
                    "items/g3": {**GOOD, "ref": "G3", "status": "open", "askedAt": iso(60), "for": "owner"},
                    "items/g4": {**GOOD, "ref": "G4", "status": "open", "askedAt": iso(60)},
-                   "people/u_des": {"submittedAt": iso(5)},
+                   "people/u_des": {"submittedAt": iso(5)}, **owner_done(),
                    "people/u_owner/answers/g1": {"choice": "", "choiceLabel": "", "note": "Neither: ask me tomorrow.", "at": iso(30)},
                    "people/u_owner/answers/g4": {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(30)},
                    "people/u_des/answers/g3": {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(30)}}
@@ -701,7 +709,7 @@ class QueueScript(unittest.TestCase):
                                                "prompt": "~/q/prompt.txt", "steps": [{"text": "Run it.", "command": "~/q/run.sh"}]}))
         self.assertIn("can't read", self.run_q("fyi", "t", "@" + str(self.tmp / "gone.html"), ok=False).stderr, "not a traceback")
         self.assertIn("--outcome: '~/q/g1-outcome.md'", self.run_q("close", "t", "G1", "--outcome", "~/q/g1-outcome.md", "--version", "2", ok=False).stdout)
-        took = {"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)},
+        took = {"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)}, **owner_done(),
                 "people/u_owner/answers/g1": {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(30)}}
         r = self.run_q("take-in", "t", self.listing(took), "--pins", "G1=1", "--outcome", "G1=@drafts/g1.html", ok=False)
         self.assertIn("g1 --outcome", r.stdout)
@@ -847,15 +855,18 @@ class QueueScript(unittest.TestCase):
         put("people/u_des/answers/g1", {"choice": "16", "choiceLabel": "16 m", "note": "done", "at": iso(30)})       # before their Submit
         put("people/u_des/answers/g2", {"choice": "8", "choiceLabel": "8 m", "note": "half a thou", "at": iso(10)})  # after it: still writing
         put("people/u_des/answers/anything-else", {"note": "Report, in progr", "at": iso(5)})
-        put("people/u_owner/answers/g3", {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(5)})          # the owner needs no Submit
+        put("people/u_owner", {"submittedAt": iso(4)}); put("receipts/u_owner", {"readAt": iso(3)})
+        put("people/u_owner/answers/g3", {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(5)})          # before their Submit
         out = self.run_q("answers", "t", d).stdout
         self.assertIn("G1 Height level: 16 m", out)
         self.assertIn("G3 Height level: 16 m", out)
         self.assertIn("Still writing, saved since their last Submit, so not shown or taken in: Anything else, G2.", out)
         self.assertNotIn("half a thou", out); self.assertNotIn("in progr", out)
+        (d / "receipts/u_owner.json").unlink(); (d / "receipts").rmdir()
         r = self.run_q("take-in", "t", d, "--pins", "G1=1 G2=1 G3=1", "--free", "u_des=1", ok=False)
-        self.assertIn('add --pins "receipts/u_des=?". No receipts/', r.stderr + r.stdout,
+        self.assertIn('add --pins "receipts/u_des=? receipts/u_owner=?". No receipts/', r.stderr + r.stdout,
                       "receipts not listed: a receipt that exists would refuse the whole batch unpinned (God Game, 14 November)")
+        put("receipts/u_owner", {"readAt": iso(3)})
         result = self.run_q("take-in", "t", d, "--pins", "G1=1 G2=1 G3=1 u_des=new", "--free", "u_des=1")
         receipt = next(w for w in self.writes(result) if w["collection"] == "receipts")
         self.assertNotIn("if_version", receipt, "=new: the listing found no receipt, so it's created")
@@ -868,6 +879,38 @@ class QueueScript(unittest.TestCase):
         self.assertIn(("items", "g2"), written, "taken in anyway when the owner asks")
         self.assertIn(("people/u_des/answers", "anything-else"), written)
         self.assertIn("half a thou", self.run_q("answers", "t", d, "--unsubmitted", "u_des").stdout)
+
+    def test_the_owners_answers_wait_for_their_submit_too(self):
+        # roc-ui's queue, 20 November: the lead took in five answers the owner had saved but not submitted, since the
+        # owner's own answers counted without Submit. The owner: "Did you just take-in my answers? I don't think I clicked
+        # Submit yet." and "as a rule, you should wait for Submit".
+        self.init()
+        d = self.listing({"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)},
+                          "items/g2": {**GOOD, "ref": "G2", "status": "open", "askedAt": iso(60)},
+                          "people/u_owner": {"submittedAt": iso(20), "lastAnswerAt": iso(10)}, "receipts/u_owner": {"readAt": iso(19)},
+                          "people/u_owner/answers/g1": {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(30)},   # before their Submit
+                          "people/u_owner/answers/g2": {"choice": "8", "choiceLabel": "8 m", "note": "half a thou", "at": iso(10)},
+                          "people/u_owner/answers/anything-else": {"note": "Report, in progr", "at": iso(9)}})
+        out = self.run_q("answers", "t", d).stdout
+        self.assertIn("G1 Height level: 16 m", out)
+        self.assertIn("Still writing, saved since their last Submit, so not shown or taken in: Anything else, G2.", out)
+        self.assertIn("as a rule, you should wait for Submit", out)
+        self.assertIn("even when they've told you to check the queue", out)
+        self.assertNotIn("half a thou", out); self.assertNotIn("in progr", out)
+        written = {(w["collection"], w["doc_id"]) for w in self.writes(self.run_q("take-in", "t", d, "--pins", "G1=1 G2=1", "--free", "u_owner=1"))}
+        self.assertIn(("items", "g1"), written)
+        self.assertNotIn(("items", "g2"), written, "the owner's answer saved since their Submit leaves the question open")
+        self.assertNotIn(("people/u_owner/answers", "anything-else"), written, "their note still being typed is never cleared")
+        self.assertNotIn(("receipts", "u_owner"), written, "that Submit was already read")
+        written = {(w["collection"], w["doc_id"]) for w in self.writes(
+            self.run_q("take-in", "t", d, "--pins", "G1=1 G2=1", "--free", "u_owner=1", "--unsubmitted", "u_owner"))}
+        self.assertIn(("items", "g2"), written, "taken in when the owner asks for it")
+        self.assertIn(("people/u_owner/answers", "anything-else"), written)
+        no_people = self.listing({"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)},
+                                  "people/u_owner/answers/g1": {"choice": "16", "choiceLabel": "16 m", "note": "", "at": iso(30)}})
+        r = self.run_q("take-in", "t", no_people, "--pins", "G1=1", ok=False)
+        self.assertIn("No people/ records", r.stderr, "without the owner's record no Submit is seen")
+        self.assertEqual(self.writes(r), [])
 
     def test_take_in_closes_answered_questions_first(self):
         self.init()
