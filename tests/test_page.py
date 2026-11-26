@@ -210,7 +210,7 @@ class PageTest(unittest.TestCase):
                 self.ctx.close(); self.ctx = None
 
     def test_someone_elses_question_is_yellow(self):
-        # The designer answered God Game's G116, for the owner, three times: its card wore the same green as their own
+        # A collaborator answered God Game's G116, for the owner, three times: its card wore the same green as their own
         # (the owner, 23 October). Someone else's question now wears the page's yellow throughout.
         data = seed()
         data["items/g1"]["for"] = "owner"
@@ -221,12 +221,12 @@ class PageTest(unittest.TestCase):
         token = lambda name: p.evaluate("(n) => { const d = document.createElement('div'); d.style.color = `var(${n})`; document.body.append(d); "
                                         "const c = getComputedStyle(d).color; d.remove(); return c; }", name)
         rec, line, green = token("--rec"), token("--rec-line"), token("--green")
-        self.assertEqual(p.locator("#queue .item.not-mine .ref").all_inner_texts(), ["G1"], "only the owner's question, for the designer")
+        self.assertEqual(p.locator("#queue .item.not-mine .ref").all_inner_texts(), ["G1"], "only the owner's question, for the collaborator")
         for sel, prop, want in (("#item-g1", "borderLeftColor", line), ("#item-g1 .opt[aria-checked='true']", "borderTopColor", line),
                                 ("#item-g1 .ref", "color", rec), ("#item-g1 .chip.for", "backgroundColor", rec)):
             self.assertEqual(colour(sel, prop), want, sel)
         for sel, prop in (("#item-g4", "borderLeftColor"), ("#item-g4 .opt[aria-checked='true']", "borderTopColor"), ("#item-g4 .ref", "color")):
-            self.assertEqual(colour(sel, prop), green, sel + ": the designer's own question stays green")
+            self.assertEqual(colour(sel, prop), green, sel + ": the collaborator's own question stays green")
         self.assertEqual(p.evaluate("getComputedStyle(document.querySelector('#item-g1 .case .pro'), '::marker').color"), green,
                          "a pro is still green on someone else's question: it says good, not whose")
         self.assertEqual(self.text("#item-g4 .chip.for"), "For you")
@@ -357,7 +357,7 @@ class PageTest(unittest.TestCase):
         # The tag for a status the page doesn't know made a 360 px phone's page 476 px wide, so it scrolled sideways.
         data = seed()
         data["items/g8"] = {**decision("G8", 8, iso(60)), "status": "taken-in-by-hand"}
-        data["items/g6"]["due"] = "after the designer's next round of sketches"
+        data["items/g6"]["due"] = "after the collaborator's next round of sketches"
         p = self.open(data, width=360)
         self.assertLessEqual(p.evaluate("document.documentElement.scrollWidth"), 360)
         over = p.evaluate("[...document.querySelectorAll('.item .chip')].filter(c => c.getBoundingClientRect().right > "
@@ -571,7 +571,7 @@ class PageTest(unittest.TestCase):
         p = self.open(data)
         self.assertIn("Unattended wake is on", self.text("#unsafe"))
         mark = json.loads(p.evaluate("localStorage.getItem('owner-queue:test-1234:submitted')"))
-        self.assertFalse(mark["ready"], "the designer's submit doesn't wake without the collaborator flag")
+        self.assertFalse(mark["ready"], "the collaborator's submit doesn't wake without the collaborator flag")
         self.assertIn("A collaborator submitted", self.text("#submitLine"))
         p.click("#submitBtn")
         p.wait_for_timeout(200)

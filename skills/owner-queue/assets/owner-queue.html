@@ -83,7 +83,7 @@ button.link { border: 0; background: none; padding: 0; color: var(--accent); tex
 .chip.blocking { background: var(--warn); color: var(--surface); font-weight: 700; }
 .chip.for { background: var(--accent-soft); color: var(--accent); }
 /* A question someone else decides wears yellow wherever the viewer's own wear green, and says whose it is in solid
-   yellow: the designer answered God Game's G116, for the owner, three times (the owner, 23 October). */
+   yellow: a collaborator answered God Game's G116, for the owner, three times (the owner, 23 October). */
 .item.not-mine { --accent: var(--rec); --accent-soft: var(--rec-soft); border-color: var(--rec-line); }
 .item.not-mine.is-answered { border-left-color: var(--rec-line); }
 .item.not-mine .opt[aria-checked="true"] { border-color: var(--rec-line); box-shadow: inset 3px 0 0 var(--rec-line); }
@@ -642,7 +642,7 @@ function currentAnswers(item, id) {
 function isAnswered(id) { const item = items.get(id); return currentAnswers(item, id).length > 0 || (me && hasContent(item, myAnswer(id)) && isCurrent(item, myAnswer(id))); }
 
 // A status the page doesn't know (a hand-written "closed", a typo) used to show the question open, its answers still on
-// it, after Claude had taken them in (2.17.1, a game designer's queue: three questions "lingering"). Taken in (takenAt), it's
+// it, after Claude had taken them in (2.17.1, a shared queue: three questions "lingering"). Taken in (takenAt), it's
 // done; otherwise open. Either way it says so, so whoever looks can have it fixed.
 const strayStatus = new Map();   // id -> the status as stored
 function knownStatus(id, item) {

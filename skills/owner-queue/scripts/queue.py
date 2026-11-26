@@ -60,7 +60,7 @@ CHECKLIST = """Lint can't check these. Check each yourself before publishing:
   - Each pro and con is what changes for the reader, in plain words, one sentence. Uncertainty is said once, where it
     could change the pick.
   - Every claim and number checked against its source; earlier answers cited for no more than they said.
-  - For the designer or a collaborator: their terms, nothing technical; an approach goes to them before it's built."""
+  - For a collaborator: their terms, nothing technical; an approach goes to them before it's built."""
 # What a question shows without a click, and how much of it a reader should have to read (the owner, 20 November:
 # verbosity on every queue). Nine long real questions, written whole and then folded only where that cut, showed 250 to
 # 690 words, six of them under 500, and kept every fact.
@@ -284,7 +284,7 @@ def lint_you(state, where, text, errors, allowed=False):
         ends = [i + 1 for i in (plain.find(c, m.end()) for c in ".!?\n") if i >= 0]
         sentence = plain[start:min(ends, default=len(plain))].strip()
         errors.append(f"{where}: “{m.group(0)}” in “{sentence}”. Others read this queue, and each takes “you” as "
-                      f"themselves: name people by role (the owner, the designer). “You” belongs only in a question with a "
+                      f"themselves: name people by role (the owner, the collaborator). “You” belongs only in a question with a "
                       f"`for`, and quoted words are left alone. For a deliberate “you”, pass --allow-you.")
 
 
@@ -920,7 +920,7 @@ def cmd_close(a):
 
 def reading_load(state, a, new, doc_id, item, errors, warnings):
     """How much a question asks its reader to read, and the habits that grew it: the median question doubled from
-    October to November, and the owner and the designer both found them too long (the owner, 20 November). Returns the
+    October to November, and the owner and a collaborator both found them too long (the owner, 20 November). Returns the
     words it shows without a click."""
     ref = item.get("ref") or doc_id
     if item.get("details") is not None and not page_has(state, "details"):
@@ -1210,7 +1210,7 @@ def cmd_answers(a):
 
 
 # The statuses the page knows. Any other (a hand-written "closed", a typo) showed the question as open, its answers
-# still on it, though Claude had taken them in (a game designer's queue, 5 November: three questions "lingering").
+# still on it, though Claude had taken them in (a shared queue, 5 November: three questions "lingering").
 STATUSES = ("open", "waiting", "done")
 
 

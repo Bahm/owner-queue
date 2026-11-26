@@ -247,7 +247,7 @@ class QueueScript(unittest.TestCase):
         # FYI ... with anything technical collapsed by default" (the owner, 25 October).
         self.init()
         out = lambda r: r.stdout + r.stderr
-        self.assertNotIn("lede:", out(self.run_q("config", "t", "--lede", "<b>20 November:</b> G4 waits on the designer.")))
+        self.assertNotIn("lede:", out(self.run_q("config", "t", "--lede", "<b>20 November:</b> G4 waits on the collaborator.")))
         self.assertIn("lede: 100 words", out(self.run_q("config", "t", "--lede", "<p>" + "word " * 100 + "</p>")))
         r = self.run_q("config", "t", "--lede", "<p>" + "word " * 500 + "</p>", ok=False)
         self.assertIn("goes in a panel", out(r))
@@ -522,7 +522,7 @@ class QueueScript(unittest.TestCase):
             self.assertIn(f"“{word}” in", r.stdout)
             self.assertEqual(self.writes(r), [], "nothing written")
         self.assertIn("“your” in “Merged, as your G136 note asked.”", self.run_q("fyi", "t", "<p>Merged, as your G136 note asked.</p>", ok=False).stdout)
-        for quoted in ('<p>The designer asked: “Can you add sections?”</p>', '<p>The note said "thank you".</p>',
+        for quoted in ('<p>The collaborator asked: “Can you add sections?”</p>', '<p>The note said "thank you".</p>',
                        "<blockquote>Do you mean the cliffs?</blockquote><p>The owner answered.</p>",
                        "<p>A layout for the bayou on YouTube.</p>"):
             self.run_q("fyi", "t", quoted)
@@ -533,7 +533,7 @@ class QueueScript(unittest.TestCase):
         panels.write_text(json.dumps([{"id": "play", "title": "Try the game", "html": "<p>Your build is ready.</p>"}]))
         self.assertIn("panel play: “Your”", self.run_q("config", "t", "--panels", panels, ok=False).stdout)
         self.run_q("config", "t", "--panels", panels, "--allow-you")
-        self.run_q("config", "t", "--lede", "<b>14 November:</b> For the designer: G52.")
+        self.run_q("config", "t", "--lede", "<b>14 November:</b> For the collaborator: G52.")
 
     def test_take_in_needs_people_and_receipts_listed(self):
         # The God Game queue, 14 November: take-in ran on a listing without receipts/, and its unpinned receipt refused
@@ -679,7 +679,7 @@ class QueueScript(unittest.TestCase):
         self.assertNotIn("Fix", self.run_q("verify", "t", "v1", "--store", self.listing({"items/g2": {**GOOD, "ref": "G2"}})).stdout)
 
     def test_an_answer_saved_after_take_in_is_listed_once(self):
-        # The God Game queue's G124 (14 November): the designer's note, edited 1.1 s after take-in closed it, was never
+        # The God Game queue's G124 (14 November): the collaborator's note, edited 1.1 s after take-in closed it, was never
         # listed, since `answers` skipped every answer to a closed question. The page locks a closed question; a save
         # already on its way still lands after it.
         self.init()
