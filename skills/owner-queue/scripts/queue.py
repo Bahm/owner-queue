@@ -495,6 +495,46 @@ def lint_feed(entry):
     return errors, warnings
 
 
+# A merge handed to the owner in passing is a promise, not a step. On the Lectern queue (26 November), "then the front
+# page PR comes to you to merge" sat in an outcome, the status line and chat, and no `yours` step carried it; the owner:
+# "did you forget to utilize the owner queue for this?" Only a `yours` step shows up as theirs to do.
+HANDS_OVER = re.compile(r"\bmerge\b", re.I)
+PR_REF = re.compile(r"github\.com/[\w.-]+/([\w.-]+)/pull/(\d+)|\b([A-Za-z][\w.-]*)#(\d+)\b|\bPR\s*#?(\d+)\b", re.I)
+
+
+def pr_refs(text):
+    """The pull requests a text names, as (repo or "", number)."""
+    refs = set()
+    for m in PR_REF.finditer(str(text)):
+        repo = m.group(1) or m.group(3) or ""
+        refs.add((repo.lower(), m.group(2) or m.group(4) or m.group(5)))
+    return refs
+
+
+def owed_steps(state, texts, also=()):
+    """Warnings for each text that hands the owner a merge no open `yours` step carries, checked against the newest
+    listing's open items and `also` (items about to be written)."""
+    seen = state.get("listing") or {}
+    root = Path(seen.get("dir") or "/nonexistent")
+    items = list(read_dir(root, "items").values()) if (root / "items").is_dir() else []
+    yours = [i for i in [*items, *also] if i.get("group") == "yours" and i.get("status") != "done"]
+    carried = set().union(*(pr_refs(json.dumps(i)) for i in yours)) if yours else set()
+    def held(ref):
+        return any(n == ref[1] and (not r or not ref[0] or r == ref[0]) for r, n in carried)
+    warnings = []
+    for where, text in texts:
+        if not text or not HANDS_OVER.search(re.sub(r"<[^>]+>", " ", str(text))):
+            continue
+        refs = pr_refs(text)
+        missing = [f"{r}#{n}" if r else f"#{n}" for r, n in sorted(refs) if not held((r, n))]
+        if missing or (not refs and not yours):
+            what = ", ".join(missing) if missing else "a pull request"
+            warnings.append(f"{where}: it hands the owner a merge ({what}) that no open `yours` step carries. Write that "
+                            "step, with the link and its steps, in this turn (SKILL.md, \"Something only they can do\"): an "
+                            "outcome, the status line, For information or chat is not one.")
+    return warnings
+
+
 def report(errors, warnings, checklist=True):
     for e in errors:
         print("ERROR  " + e)
@@ -678,6 +718,7 @@ def cmd_config(a):
         lint_html("lede", a.lede, errors, warnings)
         lint_lede_length(a.lede, errors, warnings)
         lint_you(state, "lede", a.lede, errors, a.allow_you)
+        warnings += owed_steps(state, [("lede", a.lede)])
         if not report(errors, warnings, checklist=False):
             die("Not written.")
     errors = []   # the whole config is written, so a path left in it by an earlier write is refused too
@@ -872,6 +913,7 @@ def cmd_ask(a):
     if not report(errors, warnings):
         die("Not written: fix the errors above.")
     state.setdefault("shown", {})[doc_id] = shown
+    a.also_items = [item]
     lede = lede_arg(state, a, (item.get("ref") or doc_id) if new or a.reask else "")
     if a.reask and not new and state.get("listing"):   # the listing shows it open with its answer: close's check skips it
         state["listing"]["handled"] = sorted(set(state["listing"].get("handled") or []) | {doc_id})
@@ -908,7 +950,7 @@ def cmd_close(a):
     errors = []
     lint_path("--outcome", a.outcome, errors)
     lint_path("--undo", a.undo, errors)
-    if not report(errors, [], checklist=False):
+    if not report(errors, owed_steps(state, [("--outcome", a.outcome)]), checklist=False):
         die("Not written.")
     doc_id = id_for(state, a.id)
     unchecked = left_to_take_in(state, a, doc_id, "close")
@@ -979,6 +1021,7 @@ def lede_arg(state, a, changed):
     lint_html("lede", lede, errors, warnings)
     lint_lede_length(lede, errors, warnings)
     lint_you(state, "lede", lede, errors, a.allow_you)
+    warnings += owed_steps(state, [("lede", lede)], getattr(a, "also_items", ()))
     for where, text in config_texts({**state["config"], "lede": lede}):
         lint_path(where, text, errors, "Put the HTML itself in the panels file" if where.startswith("panel") else READ_IT)
     if not report(errors, warnings, checklist=False):
@@ -1020,6 +1063,7 @@ def cmd_fyi(a):
     entry = {"at": stamp(t), "html": text}
     errors, warnings = lint_feed(entry)
     lint_you(state, "feed", text, errors, a.allow_you)
+    warnings += owed_steps(state, [("fyi", text)])
     if word_count(FOLDED.sub(" ", text)) > FYI_WARN:
         warnings.append(f"fyi: {word_count(FOLDED.sub(' ', text))} words show. Say what was done in one to three sentences, "
                         "and fold the technical part inside <details><summary>Details</summary>…</details>.")
@@ -1260,7 +1304,7 @@ def cmd_take_in(a):
     for flag, texts in (("--outcome", plans), ("--reply", replies)):
         for item_id, text in texts.items():
             lint_path(f"{item_id} {flag}", text, errors)
-    if not report(errors, [], checklist=False):
+    if not report(errors, owed_steps(state, [(f"{i} --outcome", t) for i, t in plans.items()]), checklist=False):
         die("Nothing written.")
     marks = {}   # item id -> its `read` map: input answers on a question someone else decides, marked read (O16)
     for uid, item_id, ans, what in take_in_plan(root, items, people, uids, owner, a.unsubmitted or ()):

@@ -131,6 +131,7 @@ The waking is done by `queue_watch.py`, which reads the copy of the queue open i
 - A question's `source` folds as the last line under "More detail", with the evidence it names; it had shown below every question, outside the words `ask` counts (2.24.1, the roc-ui session, 20 November).
 - `ask --version` replaces the whole question: a field the file leaves out is removed, and `ask` names any the newest listing shows stored. The store merges an update, so a dropped field had kept its old value; three of God Game's O31 rewrites nearly kept a `source` they had dropped (2.24.2, the God Game session, 20 November).
 - An edit's whole question includes `priority` and `priorityReason`, so one that schedules a question by sending `"status": "waiting"` drops them as `wait` does; roc-ui-research's S71–S73 and S89 had kept theirs (2.24.3, the research session, 20 November).
+- `ask`, `close`, `take-in`, `fyi` and `config --lede` warn when an outcome, the status line or For information hands the owner a merge that no open `yours` step carries, by the pull request it names; SKILL.md says a pull request to merge is a `yours` step. The Lectern session put "comes to you to merge" in an outcome, the status line and chat, and no step (2.25.0, the owner, 26 November).
 
 ## License
 
