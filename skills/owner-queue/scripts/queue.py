@@ -498,7 +498,8 @@ def lint_feed(entry):
 # A merge handed to the owner in passing is a promise, not a step. On the Lectern queue (26 November), "then the front
 # page PR comes to you to merge" sat in an outcome, the status line and chat, and no `yours` step carried it; the owner:
 # "did you forget to utilize the owner queue for this?" Only a `yours` step shows up as theirs to do.
-HANDS_OVER = re.compile(r"\bmerge\b", re.I)
+HANDS_OVER = re.compile(r"\bmerg(?:e|es|ing)\b", re.I)   # "merged" is done: it hands nothing over
+NAMES_A_PR = re.compile(r"\bPRs?\b|\bpull requests?\b", re.I)   # "merge the two passes" hands nothing over
 PR_REF = re.compile(r"github\.com/[\w.-]+/([\w.-]+)/pull/(\d+)|\b([A-Za-z][\w.-]*)#(\d+)\b|\bPR\s*#?(\d+)\b", re.I)
 
 
@@ -513,19 +514,23 @@ def pr_refs(text):
 
 def owed_steps(state, texts, also=()):
     """Warnings for each text that hands the owner a merge no open `yours` step carries, checked against the newest
-    listing's open items and `also` (items about to be written)."""
+    listing's open items, the steps `ask` wrote since (state["yours"]), and `also` (items about to be written)."""
     seen = state.get("listing") or {}
     root = Path(seen.get("dir") or "/nonexistent")
     items = list(read_dir(root, "items").values()) if (root / "items").is_dir() else []
     yours = [i for i in [*items, *also] if i.get("group") == "yours" and i.get("status") != "done"]
     carried = set().union(*(pr_refs(json.dumps(i)) for i in yours)) if yours else set()
+    written = state.get("yours") or {}   # a step written in this turn isn't in the listing yet
+    carried |= {tuple(r) for refs in written.values() for r in refs}
+    yours = yours or list(written)
     def held(ref):
         return any(n == ref[1] and (not r or not ref[0] or r == ref[0]) for r, n in carried)
     warnings = []
     for where, text in texts:
-        if not text or not HANDS_OVER.search(re.sub(r"<[^>]+>", " ", str(text))):
+        plain = re.sub(r"<[^>]+>", " ", str(text or ""))
+        refs = pr_refs(text or "")
+        if not (HANDS_OVER.search(plain) and (refs or NAMES_A_PR.search(plain))):
             continue
-        refs = pr_refs(text)
         missing = [f"{r}#{n}" if r else f"#{n}" for r, n in sorted(refs) if not held((r, n))]
         if missing or (not refs and not yours):
             what = ", ".join(missing) if missing else "a pull request"
@@ -913,6 +918,10 @@ def cmd_ask(a):
     if not report(errors, warnings):
         die("Not written: fix the errors above.")
     state.setdefault("shown", {})[doc_id] = shown
+    if item.get("group") == "yours" and item.get("status", "open") != "done":
+        state.setdefault("yours", {})[doc_id] = sorted(pr_refs(json.dumps(item)))
+    else:
+        (state.get("yours") or {}).pop(doc_id, None)
     a.also_items = [item]
     lede = lede_arg(state, a, (item.get("ref") or doc_id) if new or a.reask else "")
     if a.reask and not new and state.get("listing"):   # the listing shows it open with its answer: close's check skips it
@@ -955,6 +964,8 @@ def cmd_close(a):
     doc_id = id_for(state, a.id)
     unchecked = left_to_take_in(state, a, doc_id, "close")
     lede = lede_arg(state, a, a.id)
+    if (state.get("yours") or {}).pop(doc_id, None) is not None:
+        save_state(state)
     out = Out(state, "close-" + doc_id)
     out.add("update", "items", doc_id, data, a.version)
     out.emit((unchecked + add_lede(state, out, lede)).strip())
@@ -1354,6 +1365,7 @@ def cmd_take_in(a):
         if plans.get(item_id):
             data["outcome"] = plans[item_id]
         out.add("update", "items", item_id, data, pins[item_id])
+        (state.get("yours") or {}).pop(item_id, None)
         if item_id not in again:
             refs.append(items[item_id].get("ref") or item_id)
     for item_id in repair:
@@ -1655,6 +1667,11 @@ def lede_flags(p):
 
 
 def main():
+    for stream in (sys.stdout, sys.stderr):   # a Windows console isn't UTF-8, and printing "→" stopped 20 tests there
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):
+            pass
     ap = argparse.ArgumentParser(description="Owner Queue 2.0 session tool")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("init"); p.add_argument("title"); p.add_argument("--slug"); p.add_argument("--prefix")

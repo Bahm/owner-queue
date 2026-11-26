@@ -286,6 +286,31 @@ class QueueScript(unittest.TestCase):
                       "a step for one pull request doesn't carry another")
         self.assertNotIn(warn, out(self.run_q("config", "t", "--lede", "Both pull requests merged; the page is live.")))
 
+    def test_a_merge_check_knows_steps_written_since_the_listing(self):
+        # Reviewing 2.25.0: a step `ask` wrote in this turn isn't in the newest listing yet, so mentioning it warned; and
+        # any "merge" warned, pull request or not.
+        out = lambda r: r.stdout + r.stderr
+        warn = "no open `yours` step carries"
+        self.init()
+        self.run_q("answers", "t", self.listing({"items/g1": {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)}}))
+        self.assertNotIn(warn, out(self.run_q("config", "t", "--lede", "<b>26 November:</b> Next, merge the two terrain passes.")))
+        step = {"title": "Merge the front page", "ask": "Merge the pull request.", "group": "yours", "ref": "G2",
+                "context": "<p><a href='https://github.com/o/site/pull/121'>site#121</a></p>", "steps": [{"text": "Merge it."}],
+                "priority": 1, "priorityReason": "The front page waits on it."}
+        self.run_q("ask", "t", self.item_file(step))
+        fyi = "<p>The front page is ready: the owner merges site#121 (G2).</p>"
+        self.assertNotIn(warn, out(self.run_q("fyi", "t", fyi)), "written in this turn, so it carries the merge")
+        self.run_q("close", "t", "G2", "--version", "1", "--outcome", "Merged.")
+        self.assertIn(warn, out(self.run_q("fyi", "t", fyi)), "closed, it carries nothing")
+
+    def test_prints_on_a_console_that_isnt_utf8(self):
+        # The 2.25.0 pull request, on Windows: printing "→" raised UnicodeEncodeError and stopped 20 tests.
+        self.init()
+        r = subprocess.run([sys.executable, str(QUEUE), "ask", "t", str(self.item_file(GOOD)), "--lede-holds"],
+                           env={**self.env, "PYTHONIOENCODING": "ascii"}, capture_output=True)
+        self.assertEqual(r.returncode, 0, r.stderr.decode("utf-8", "replace"))
+        self.assertIn("Item G1 → items/g1", r.stdout.decode("utf-8"))
+
     def reask(self, *extra, ok=True):
         r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "3", "--reask", *extra, ok=ok)
         if not ok:
