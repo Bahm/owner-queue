@@ -264,6 +264,28 @@ class QueueScript(unittest.TestCase):
             f = folder / f"{path}.json"; f.parent.mkdir(parents=True, exist_ok=True); f.write_text(json.dumps(body))
         return folder
 
+    def test_a_merge_handed_over_without_a_yours_step_warns(self):
+        # The Lectern queue, 26 November: "then the front page PR comes to you to merge" went into an outcome, the status
+        # line and chat, and no `yours` step carried it. The owner: "did you forget to utilize the owner queue for this?"
+        out = lambda r: r.stdout + r.stderr
+        self.init()
+        pr = "https://github.com/o/site/pull/121"
+        g1 = {**GOOD, "ref": "G1", "status": "open", "askedAt": iso(60)}
+        self.run_q("answers", "t", self.listing({"items/g1": g1}))
+        warn = "no open `yours` step carries"
+        self.assertIn(warn, out(self.run_q("config", "t", "--lede", "Then the front page PR (site#121) comes to the owner to merge.")))
+        self.assertIn(warn, out(self.run_q("fyi", "t", f"<p>Ready to merge: <a href='{pr}'>site#121</a>.</p>")))
+        self.assertIn(warn, out(self.run_q("close", "t", "G1", "--version", "1", "--outcome",
+                                           f"Fonts in; then {pr} leaves draft for the owner to merge.")))
+        # A `yours` step that links the pull request carries it; a merge already done hands nothing over.
+        g2 = {"title": "Merge the front page", "ask": "Merge the pull request.", "group": "yours", "status": "open",
+              "ref": "G2", "context": f"<p><a href='{pr}'>site#121</a></p>", "askedAt": iso(5)}
+        self.run_q("answers", "t", self.listing({"items/g1": g1, "items/g2": g2}))
+        self.assertNotIn(warn, out(self.run_q("config", "t", "--lede", "Yours: G2, merge the front page (site#121).")))
+        self.assertIn(warn, out(self.run_q("config", "t", "--lede", "Yours: G2. Then merge site#122 too.")),
+                      "a step for one pull request doesn't carry another")
+        self.assertNotIn(warn, out(self.run_q("config", "t", "--lede", "Both pull requests merged; the page is live.")))
+
     def reask(self, *extra, ok=True):
         r = self.run_q("ask", "t", self.item_file({**GOOD, "ref": "G1"}), "--version", "3", "--reask", *extra, ok=ok)
         if not ok:
