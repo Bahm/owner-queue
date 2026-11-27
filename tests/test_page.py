@@ -53,7 +53,9 @@ def seed():
         "items/g5": {"ref": "G5", "title": "Plug in the phone", "group": "yours", "status": "open", "priority": 5,
                      "priorityReason": "The check needs the real phone.", "askedAt": asked,
                      "needs": "Your phone, unlocked, for two minutes.",
-                     "steps": [{"text": "Run the check", "command": "~/Projects/x/phone.sh"}],
+                     "steps": [{"text": "Run the check", "command": "~/Projects/x/phone.sh"},
+                               {"text": "Open [the results](https://example.com/r), or https://example.com/all. "
+                                        "Not `https://example.com/raw`, and <b>no</b> HTML."}],
                      "prompt": "My phone is plugged in and unlocked: run the phone check now.",
                      "choices": [{"key": "done", "label": "Done", "primary": True}]},
         "items/g6": {"ref": "G6", "title": "Release notes", "status": "waiting", "due": "Oct 20"},
@@ -130,6 +132,17 @@ class PageTest(unittest.TestCase):
         self.assertIn("Needs you: 4", self.text("#tally"), "G4 is for collaborators, so it doesn't count for the owner")
         self.assertIn("recommended", self.text("#item-g1 .opts").lower())
         self.assertIn("Copy prompt", self.text("#item-g5"))
+
+    def test_a_steps_links_are_links(self):
+        # Block4Block's server queue, 27 November: a step written with <a href> showed its tags, "your links are broken".
+        p = self.open()
+        links = p.locator("#item-g5 .steps li:nth-child(2) a")
+        self.assertEqual(links.all_inner_texts(), ["the results", "https://example.com/all"])
+        self.assertEqual([links.nth(i).get_attribute("href") for i in range(2)], ["https://example.com/r", "https://example.com/all"])
+        self.assertEqual(links.first.get_attribute("target"), "_blank")
+        step = self.text("#item-g5 .steps li:nth-child(2)")
+        self.assertIn("https://example.com/raw", step, "inside backticks it stays code")
+        self.assertIn("<b>no</b>", step, "HTML in a step stays text")
 
     def test_low_priority_ranks_after_the_rest(self):
         # A low-priority question ranked above untagged ones by its number alone went against "most important first"

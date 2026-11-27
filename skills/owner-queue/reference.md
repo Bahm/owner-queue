@@ -52,7 +52,7 @@ A record is capped at 256 KiB. Questions stay small, and pictures go in files be
 | `source` | "Source: …" line naming the file or report with the evidence, folded as the last line under "More detail" |
 | `history` | `[{who, choiceLabel, note, at}]`: earlier answers carried over (by migration); answers older than `askedAt` are added by the page |
 
-Plain-text fields render `backticks` as code and never as HTML. Everything a person types is shown as text.
+Plain-text fields render `backticks` as code and never as HTML. Everything a person types is shown as text. A step's text and `needs` also make links of `[label](https://…)` and bare `https://` addresses outside backticks. Lint refuses an HTML tag in a plain-text field, which would show as written, and warns on a step whose `command` is only a link.
 
 ## Settings: `config/page`
 
