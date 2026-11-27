@@ -538,6 +538,23 @@ class QueueScript(unittest.TestCase):
         self.assertIn("mostly a pointer to G3", r.stdout)
         self.assertNotIn("mostly a pointer", self.run_q("ask", "t", self.item_file(GOOD)).stdout)
 
+    def test_links_in_plain_text(self):
+        # Block4Block's server queue, 27 November: a step's <a href> showed as its tags, and the owner said the links were broken.
+        yours = {"title": "Merge it", "ask": "Merge the pull request?", "group": "yours", "priority": 2, "priorityReason": "x"}
+        tagged = {**yours, "steps": [{"text": 'Open <a href="https://github.com/o/r/pull/1">#1</a> and merge it.'}]}
+        r = self.run_q("lint", self.item_file(tagged), ok=False)
+        self.assertIn("step: HTML in plain text", r.stdout)
+        self.assertIn("[label](https://…)", r.stdout)
+        r = self.run_q("lint", self.item_file({**GOOD, "pick": "A, <b>clearly</b>."}), ok=False)
+        self.assertIn(".pick: HTML in plain text", r.stdout)
+        self.assertIn("`context` or `details`", r.stdout)
+        fine = {**yours, "steps": [{"text": "Open [#1](https://github.com/o/r/pull/1), then `install <Plugin>` if p < 2."}]}
+        r = self.run_q("lint", self.item_file(fine))
+        self.assertNotIn("HTML in plain text", r.stdout, "a markdown link, <Plugin> and a < b are plain text")
+        boxed = {**yours, "steps": [{"text": "Open it:", "command": "https://github.com/o/r/pull/1"}]}
+        self.assertIn("a step's command is a link", self.run_q("lint", self.item_file(boxed)).stdout)
+        self.assertNotIn("HTML in plain text", self.run_q("lint", self.item_file(GOOD)).stdout, "context takes HTML")
+
     def test_flags(self):
         self.init()
         r = self.run_q("config", "t", "--unsafe-collaborator-wake", ok=False)

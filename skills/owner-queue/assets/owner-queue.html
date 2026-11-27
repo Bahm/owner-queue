@@ -294,6 +294,27 @@ function withCode(target, text) {
   return target;
 }
 
+// withCode, plus links: [label](https://…) and bare https:// addresses outside the code. For the text of a step and
+// `needs`, where a person is sent to a page: written as HTML there, a link showed as its tags (Block4Block's server
+// queue, 27 November: "your links are broken").
+const LINK = /\[([^\]\n]+)\]\((https?:\/\/[^\s()]+)\)|https?:\/\/[^\s<>"'`()\[\]]*[^\s<>"'`()\[\].,;:!?]/g;
+function withLinks(target, text) {
+  const value = String(text ?? ""), parts = value.split("`"), paired = parts.length % 2 === 1;
+  (paired ? parts : [value]).forEach((part, i) => {
+    if (!part) return;
+    if (paired && i % 2) { target.append(el("code", "", part)); return; }
+    let last = 0;
+    for (const m of part.matchAll(LINK)) {
+      if (m.index > last) target.append(document.createTextNode(part.slice(last, m.index)));
+      const a = el("a", "", m[1] || m[0]);
+      a.href = m[2] || m[0]; a.target = "_blank"; a.rel = "noopener noreferrer";
+      target.append(a); last = m.index + m[0].length;
+    }
+    if (last < part.length) target.append(document.createTextNode(part.slice(last)));
+  });
+  return target;
+}
+
 // Claude's HTML (question context, the status line, For information, panels) passes an allowlist: no scripts,
 // no event handlers, no frames, no forms, links and pictures only from safe addresses.
 const TAGS = new Set("a abbr time b blockquote br caption code dd del details div dl dt em figcaption figure h3 h4 h5 hr i img kbd li mark ol p pre q s small span strong sub summary sup table tbody td tfoot th thead tr u ul button svg g defs title desc polygon polyline line rect circle ellipse path text tspan marker".split(" "));
@@ -858,11 +879,11 @@ function updateItem(id, item, rank, openCount) {
   if (changedKey(v, "details", item.details)) setHtml(v.moreBody, item.details || "");
   v.more.hidden = !item.details && !item.source;
   const doer = forMe(item);
-  if (changedKey(v, "needs", [item.needs, doer])) { v.needs.replaceChildren(); if (item.needs) { v.needs.append(el("span", "label", doer ? "What you'll need" : "What it needs")); v.needs.append(withCode(el("p"), item.needs)); } }
+  if (changedKey(v, "needs", [item.needs, doer])) { v.needs.replaceChildren(); if (item.needs) { v.needs.append(el("span", "label", doer ? "What you'll need" : "What it needs")); v.needs.append(withLinks(el("p"), item.needs)); } }
   v.needs.hidden = !item.needs || !open;
   if (changedKey(v, "steps", item.steps)) {
     v.steps.replaceChildren();
-    for (const s of arr(item.steps)) { const li = el("li"); if (s.text) li.append(withCode(el("p"), s.text)); if (s.command) li.append(commandBlock(s.command)); v.steps.append(li); }
+    for (const s of arr(item.steps)) { const li = el("li"); if (s.text) li.append(withLinks(el("p"), s.text)); if (s.command) li.append(commandBlock(s.command)); v.steps.append(li); }
   }
   v.steps.hidden = !arr(item.steps).length || !open;
   if (changedKey(v, "prompt", [item.prompt, doer])) { v.prompt.replaceChildren(); if (item.prompt) { v.prompt.append(el("span", "label", doer ? "When you're ready, paste this into the chat" : "The prompt to paste into the chat, when ready")); v.prompt.append(commandBlock(item.prompt, "Copy prompt")); } }

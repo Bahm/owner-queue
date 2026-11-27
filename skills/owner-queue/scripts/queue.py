@@ -241,6 +241,8 @@ class Out:
 
 # ---- lint --------------------------------------------------------------------
 HTML_FIELDS = ("context", "details", "html", "lede")
+# A tag from the HTML allowlist in a plain-text field, where the page shows it as written ("<Plugin>" or "a < b" is not one).
+PLAIN_TAG = re.compile(r"</?(?:a|b|i|u|s|em|strong|code|kbd|br|p|span|div|ul|ol|li|small|mark|q)(?:\s[^<>]*)?/?>", re.I)
 BAD_HTML = [
     (re.compile(r"<\s*script", re.I), "a <script> tag"),
     (re.compile(r"\son[a-z]+\s*=", re.I), "an event-handler attribute (on...=)"),
@@ -401,6 +403,16 @@ def lint_item(item, state=None):
     plain += [s.get("text") for s in steps]
     plain += [text for choice in choices for text in (choice.get("label"), choice.get("cost"), *listed(choice.get("pros")), *listed(choice.get("cons")))]
     lint_times(ref, [str(x) for x in plain if x], warnings)   # plain text on the page, never HTML: no tags to strip
+    for where, text in item_texts(item, ref):
+        if where.split(".")[-1] not in HTML_FIELDS and text and PLAIN_TAG.search(str(text)):
+            errors.append(f"{where}: HTML in plain text, which the page shows as written, tags and all. "
+                          + ("Write a link as [label](https://…) or the bare https:// address; the page makes it a link."
+                             if where.endswith(" step") or where.endswith(".needs") else
+                             "Put links and formatting in `context` or `details`, which take HTML."))
+    for s in steps:
+        if re.fullmatch(r"\s*https?://\S+\s*", str(s.get("command", ""))):
+            warnings.append(f"{ref}: a step's command is a link, which shows in a Copy box. Put it in the step's text as "
+                            f"[label](https://…), which the page shows as a link to press.")
     for c in choices:
         for field in ("label", "cost"):
             if re.search(r"data:[a-z]+/", str(c.get(field, "")), re.I):
